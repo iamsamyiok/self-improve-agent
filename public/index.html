@@ -483,7 +483,7 @@
     }
     fadeBusy(busyBar);
     body.classList.remove('typing-cursor');
-    if (!live && !busyBar) body.closest('.msg-assistant')?.remove();
+    if (!live.trim()) body.closest('.msg-assistant')?.remove(); /* 纯工具调用轮无文本：移除空消息，避免只有头像的空行 */
     busy = false; innerAbortCtrl = null;
     input.disabled = false; $('sendBtn').style.display='flex'; $('stopBtn').classList.remove('show');
     input.focus();
@@ -657,9 +657,32 @@
     const msgs = d.messages || [];
     if (!msgs.length) { showChat(true); return; }
     showChat(false);
-    for (const m of msgs) {
-      if (m.role === 'user') addUser(m.content || '');
-      else if (m.role === 'assistant') { const b = addMsg('msg-assistant',''); b.innerHTML = mdRender(m.content || ''); }
+    // 展示层净化：
+    // 1) 框架注入段（记忆预取/上传清单）只属于 LLM 上下文，不进用户气泡
+    // 2) 返修指令（[交付核验]）与续航提示（[框架提示]）是框架→模型的内部消息，不显示
+    // 3) 同一任务经多次返修会产生多条中间回答，只保留最终一条（用户只要最终回答）
+    const userView = s => String(s||'')
+      .split('\n\n[框架预取·相关记忆]')[0]
+      .split('\n\n[已上传文档]')[0];
+    const isFramework = s => /^\s*\[(交付核验|框架提示|框架预取)/.test(String(s||''));
+    const pairs = []; // 时间倒序构造 {user, answer}
+    let lastAnswer = '';
+    for (let i = msgs.length - 1; i >= 0; i--) {
+      const m = msgs[i];
+      if (m.role === 'assistant') {
+        if (!lastAnswer && String(m.content||'').trim()) lastAnswer = String(m.content).trim();
+      } else if (isFramework(m.content)) {
+        continue; // 返修指令/续航提示属于当前任务组内部，跳过
+      } else {
+        pairs.push({ user: userView(m.content), answer: lastAnswer });
+        lastAnswer = '';
+      }
+    }
+    if (lastAnswer) pairs.push({ user: '', answer: lastAnswer }); // 开头孤立回答（历史重置残留）
+    for (let i = pairs.length - 1; i >= 0; i--) {
+      const p = pairs[i];
+      if (p.user) addUser(p.user);
+      if (p.answer) { const b = addMsg('msg-assistant',''); b.innerHTML = mdRender(p.answer); }
     }
     const box = $('chat'); box.scrollTop = box.scrollHeight;
   }

@@ -1493,6 +1493,13 @@ async function main() {
     assert.ok(defs >= 1, 'innerAbortCtrl 创建语句存在');
   });
 
+  await t('静态防回归：历史渲染返修归组（同题多稿只显示最终回答；[交付核验]/[框架提示] 内部消息不进对话流）', () => {
+    const html = fs.readFileSync(path.join(ROOT, 'public', 'index.html'), 'utf8');
+    assert.ok(html.includes('isFramework'), 'loadHistory 必须过滤框架内部消息');
+    assert.ok(html.includes("\\u4ea4\\u4ed8\\u6838\\u9a8c|") || /交付核验\|框架提示/.test(html), '返修指令/续航提示标记必须在过滤列表');
+    assert.ok(html.includes('pairs.push({ user: userView(m.content), answer: lastAnswer })'), '必须按任务归组保留最终回答');
+  });
+
   await t('spawnSub 参数链静态防回归（v0.9.7 压测教训：拆函数断参 ReferenceError）', () => {
     const src = fs.readFileSync(path.join(ROOT, 'server.js'), 'utf8');
     const defs = [...src.matchAll(/runSubOnce = async \(picked([^)]*)\)/g)];
