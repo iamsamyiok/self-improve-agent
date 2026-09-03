@@ -1,0 +1,11 @@
+{
+  "name": "dual-agent-channel",
+  "version": "0.1.0",
+  "description": "Dual-Agent Qwen Code Channel Adapter",
+  "channels": {
+    "dual-agent": {
+      "entry": "channels/bridge.js",
+      "displayName": "Dual-Agent Channel"
+    }
+  }
+}

@@ -1,0 +1,731 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#ffffff">
+<title>HWJ Agent · 自进化工作区</title>
+<style>
+  :root {
+    --green: #10a37f; --green-dark: #0e9069; --green-light: #e7f6f1;
+    --bg: #ffffff; --side: #f9f9f9; --bubble: #f4f4f4;
+    --text: #0d0d0d; --text-2: #5d5d5d; --text-3: #8f8f8f;
+    --border: #ececf1; --border-2: #d9d9e3;
+    --code-bg: #f6f8fa; --shadow-sm: 0 1px 2px rgba(0,0,0,.05);
+    --radius: 12px;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html, body { height:100%; }
+  body { font: 15px/1.75 -apple-system, "Segoe UI", Roboto, "Helvetica Neue", "PingFang SC", "Microsoft YaHei", sans-serif; color: var(--text); background: var(--bg); overscroll-behavior:none; }
+  button { font-family: inherit; }
+  #app { display:flex; height:100%; height:100dvh; }
+
+  /* ============ 侧边栏 ============ */
+  #sidebar { width:244px; background:var(--side); border-right:1px solid var(--border); display:flex; flex-direction:column; flex-shrink:0; transition:margin .25s; }
+  #sidebar.hidden { margin-left:-244px; }
+  .sb-brand { display:flex; align-items:center; gap:10px; padding:18px 16px 10px; }
+  .logo { width:32px; height:32px; border-radius:9px; background:var(--green); color:#fff; font-weight:700; font-size:14px; display:flex; align-items:center; justify-content:center; letter-spacing:.5px; flex-shrink:0; }
+  .sb-brand b { font-size:14.5px; }
+  .sb-brand .ver { font-size:11px; color:var(--text-3); margin-left:auto; }
+  .sb-new { margin:8px 12px 14px; display:flex; align-items:center; gap:8px; border:1px solid var(--border-2); background:#fff; border-radius:10px; padding:9px 12px; font-size:13.5px; cursor:pointer; transition:background .15s, box-shadow .15s; }
+  .sb-new:hover { background:#f7f7f8; box-shadow:var(--shadow-sm); }
+  .sb-new svg { flex-shrink:0; }
+  nav { flex:1; overflow-y:auto; padding:0 8px; }
+  .nav-item { display:flex; align-items:center; gap:10px; padding:9px 10px; border-radius:10px; font-size:13.5px; color:var(--text); cursor:pointer; transition:background .15s; margin-bottom:2px; user-select:none; }
+  .nav-item:hover { background:#ececec; }
+  .nav-item.active { background:#e3e3e3; font-weight:600; }
+  .nav-item .ni-badge { margin-left:auto; font-size:10.5px; background:var(--green-light); color:var(--green-dark); border-radius:8px; padding:1px 7px; font-weight:600; }
+  .sb-sec { font-size:11px; color:var(--text-3); padding:14px 12px 4px; }
+  .sb-foot { padding:12px; border-top:1px solid var(--border); }
+  .ws-row { display:flex; align-items:center; gap:8px; font-size:12.5px; color:var(--text-2); }
+  .ws-row select { flex:1; border:1px solid var(--border-2); border-radius:8px; padding:5px 8px; font-size:12.5px; background:#fff; color:var(--text); outline:none; }
+  .health { display:flex; align-items:center; gap:6px; font-size:11.5px; color:var(--text-3); margin-top:10px; }
+  .health .dot { width:7px; height:7px; border-radius:50%; background:#c5c5d2; }
+  .health .dot.ok { background:#22c55e; }
+  .health .dot.bad { background:#ef4444; }
+
+  /* ============ 主区 ============ */
+  main { flex:1; min-width:0; display:flex; flex-direction:column; }
+  header { height:52px; display:flex; align-items:center; gap:10px; padding:0 16px; border-bottom:1px solid var(--border); flex-shrink:0; background:var(--bg); }
+  .hd-burger { display:none; border:none; background:none; font-size:18px; color:var(--text-2); cursor:pointer; padding:6px; }
+  .hd-title { display:flex; align-items:baseline; gap:8px; }
+  .hd-title b { font-size:14.5px; }
+  .hd-title span { font-size:11.5px; color:var(--text-3); }
+  .grow { flex:1; }
+  .evo-pill { display:flex; align-items:center; gap:7px; border:1px solid var(--border); border-radius:999px; padding:5px 12px; font-size:12px; color:var(--text-2); cursor:pointer; background:#fff; transition:border-color .15s, background .15s; white-space:nowrap; }
+  .evo-pill:hover { background:#f7f7f8; border-color:var(--border-2); }
+  .evo-pill .pulse { width:8px; height:8px; border-radius:50%; background:#c5c5d2; flex-shrink:0; }
+  .evo-pill .pulse.live { background:var(--green); animation:pulse 1.4s ease-in-out infinite; }
+  @keyframes pulse { 0%,100%{ box-shadow:0 0 0 0 rgba(16,163,127,.4);} 50%{ box-shadow:0 0 0 5px rgba(16,163,127,0);} }
+  .tok-badge { display:none; font-size:11px; color:var(--text-3); border:1px solid var(--border); border-radius:999px; padding:4px 10px; white-space:nowrap; }
+
+  /* ============ 消息流 ============ */
+  #chat { flex:1; overflow-y:auto; scroll-behavior:smooth; }
+  .chat-inner { max-width:768px; margin:0 auto; padding:28px 20px 12px; display:flex; flex-direction:column; gap:22px; }
+  .msg-user { align-self:flex-end; max-width:75%; background:var(--bubble); border-radius:24px; padding:10px 18px; white-space:pre-wrap; word-break:break-word; animation:fadein .25s; }
+  .msg-assistant { display:flex; gap:14px; animation:fadein .25s; }
+  .avatar { width:26px; height:26px; border-radius:50%; background:var(--green); color:#fff; font-size:12px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0; margin-top:2px; }
+  .msg-assistant .body { flex:1; min-width:0; word-break:break-word; }
+  .msg-system { align-self:center; font-size:12px; color:var(--text-3); background:var(--bubble); border-radius:999px; padding:4px 14px; animation:fadein .25s; max-width:90%; text-align:center; }
+  .msg-error { align-self:stretch; font-size:13px; color:#b91c1c; background:#fef2f2; border:1px solid #fecaca; border-radius:var(--radius); padding:10px 14px; animation:fadein .25s; white-space:pre-wrap; word-break:break-word; }
+  @keyframes fadein { from{ opacity:0; transform:translateY(4px);} to{ opacity:1; transform:none;} }
+  .typing-cursor::after { content:'●'; font-size:9px; color:var(--green); animation:blink 1s step-end infinite; margin-left:3px; vertical-align:middle; }
+  @keyframes blink { 0%,100%{opacity:1;} 50%{opacity:0;} }
+
+  /* markdown 渲染 */
+  .body h3, .body h4 { margin:14px 0 6px; line-height:1.5; }
+  .body h3 { font-size:16px; } .body h4 { font-size:14.5px; }
+  .body p { margin:6px 0; }
+  .body ul, .body ol { margin:6px 0; padding-left:22px; }
+  .body li { margin:3px 0; }
+  .body code { background:var(--code-bg); border:1px solid var(--border); border-radius:5px; padding:1px 5px; font-size:12.5px; font-family:"SF Mono", ui-monospace, Consolas, monospace; }
+  .body pre { background:var(--code-bg); border:1px solid var(--border); border-radius:var(--radius); padding:12px 14px; overflow-x:auto; margin:8px 0; }
+  .body pre code { background:none; border:none; padding:0; font-size:12.5px; line-height:1.6; }
+  .body table { border-collapse:collapse; margin:10px 0; font-size:13.5px; width:100%; }
+  .body th, .body td { border:1px solid var(--border-2); padding:6px 10px; text-align:left; }
+  .body th { background:var(--side); font-weight:600; }
+  .body blockquote { border-left:3px solid var(--green); color:var(--text-2); padding:2px 12px; margin:8px 0; }
+  .body a { color:var(--green-dark); text-decoration:underline; text-underline-offset:2px; }
+
+  /* 工具调用条 */
+  /* 处理中指示器：对话流里唯一的"动态进程"，完成后自动淡出 */
+  .busy-bar { display:flex; align-items:center; gap:9px; font-size:13px; color:var(--text-3); padding:4px 2px; animation:fadein .25s; transition:opacity .5s; }
+  .busy-bar.fade { opacity:0; }
+  .spinner { width:13px; height:13px; border:2px solid var(--border-2); border-top-color:var(--green); border-radius:50%; animation:spin .8s linear infinite; flex-shrink:0; }
+  @keyframes spin { to{ transform:rotate(360deg);} }
+
+  /* 空状态 */
+  #welcome { max-width:768px; margin:0 auto; padding:9vh 20px 20px; text-align:center; }
+  #welcome h1 { font-size:28px; font-weight:600; letter-spacing:-.5px; margin-bottom:28px; }
+  .sug-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; text-align:left; }
+  .sug { border:1px solid var(--border); border-radius:var(--radius); padding:13px 15px; cursor:pointer; transition:background .15s; }
+  .sug:hover { background:var(--side); }
+  .sug b { display:block; font-size:13.5px; font-weight:600; margin-bottom:2px; }
+  .sug span { font-size:12px; color:var(--text-3); }
+
+  /* ============ 输入区 ============ */
+  .composer-wrap { padding:8px 20px calc(14px + env(safe-area-inset-bottom, 0px)); flex-shrink:0; background:linear-gradient(transparent, var(--bg) 30%); }
+  .composer { max-width:768px; margin:0 auto; display:flex; align-items:flex-end; gap:8px; border:1px solid var(--border-2); border-radius:26px; padding:9px 9px 9px 16px; background:#fff; box-shadow:0 2px 12px rgba(0,0,0,.04); transition:box-shadow .2s, border-color .2s; }
+  .composer:focus-within { border-color:#c4c4cc; box-shadow:0 4px 18px rgba(0,0,0,.08); }
+  .composer textarea { flex:1; border:none; outline:none; resize:none; font:inherit; font-size:15px; line-height:1.6; max-height:180px; background:transparent; color:var(--text); padding:6px 0; }
+  .composer textarea::placeholder { color:var(--text-3); }
+  .composer textarea:disabled { color:var(--text-3); }
+  .c-btn { width:36px; height:36px; border-radius:50%; border:none; background:var(--green); color:#fff; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:background .15s, transform .1s; flex-shrink:0; }
+  .c-btn:hover { background:var(--green-dark); }
+  .c-btn:active { transform:scale(.94); }
+  .c-btn:disabled { background:#d9d9e3; cursor:not-allowed; }
+  .c-btn.ghost { background:transparent; color:var(--text-3); }
+  .c-btn.ghost:hover { background:var(--bubble); }
+  .c-btn.stop { background:var(--text); display:none; }
+  .c-btn.stop.show { display:flex; }
+  .composer-hint { max-width:768px; margin:7px auto 0; text-align:center; font-size:11px; color:var(--text-3); }
+
+  /* ============ 进化抽屉 ============ */
+  #evoMask { position:fixed; inset:0; background:rgba(0,0,0,.28); opacity:0; pointer-events:none; transition:opacity .25s; z-index:60; }
+  #evoMask.show { opacity:1; pointer-events:auto; }
+  #evoDrawer { position:fixed; top:0; right:0; bottom:0; width:min(500px, 100vw); background:var(--bg); border-left:1px solid var(--border); box-shadow:-12px 0 40px rgba(0,0,0,.08); transform:translateX(102%); transition:transform .28s cubic-bezier(.2,.8,.25,1); z-index:61; display:flex; flex-direction:column; }
+  #evoDrawer.show { transform:none; }
+  .ed-head { display:flex; align-items:center; gap:10px; padding:16px 20px; border-bottom:1px solid var(--border); }
+  .ed-head b { font-size:15.5px; }
+  .ed-close { margin-left:auto; border:none; background:none; font-size:17px; color:var(--text-3); cursor:pointer; padding:6px 8px; border-radius:8px; }
+  .ed-close:hover { background:var(--bubble); color:var(--text); }
+  .ed-body { flex:1; overflow-y:auto; padding:18px 20px 30px; }
+  .ed-running { display:none; align-items:center; gap:11px; background:var(--green-light); border:1px solid #bfe5d9; border-radius:var(--radius); padding:11px 14px; font-size:13px; color:var(--green-dark); margin-bottom:16px; }
+  .ed-running.show { display:flex; }
+  .dna { width:17px; height:17px; border:2px solid rgba(16,163,127,.25); border-top-color:var(--green); border-radius:50%; animation:spin .9s linear infinite; flex-shrink:0; }
+  .ed-promote { display:none; background:linear-gradient(135deg, var(--green), #0b7a5f); color:#fff; border-radius:var(--radius); padding:13px 16px; margin-bottom:16px; font-size:13.5px; }
+  .ed-promote.show { display:block; animation:fadein .3s; }
+  .ed-promote b { font-size:14.5px; }
+  .stat-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-bottom:16px; }
+  .stat { background:var(--side); border-radius:var(--radius); padding:11px 8px; text-align:center; }
+  .stat b { display:block; font-size:19px; font-weight:700; letter-spacing:-.3px; }
+  .stat span { font-size:10.5px; color:var(--text-3); }
+  .ed-actions { display:flex; gap:8px; margin-bottom:20px; }
+  .btn-main { flex:1; border:none; background:var(--green); color:#fff; border-radius:10px; padding:9px 14px; font-size:13px; cursor:pointer; transition:background .15s; }
+  .btn-main:hover { background:var(--green-dark); }
+  .btn-main:disabled { background:#d9d9e3; cursor:not-allowed; }
+  .btn-sub { border:1px solid var(--border-2); background:#fff; border-radius:10px; padding:9px 14px; font-size:13px; cursor:pointer; color:var(--text-2); transition:background .15s; }
+  .btn-sub:hover { background:var(--side); }
+  .ed-sec { font-size:12px; font-weight:600; color:var(--text-3); letter-spacing:.4px; margin:4px 0 10px; }
+  /* 实验时间线卡片 */
+  .exp-card { border:1px solid var(--border); border-radius:14px; padding:14px 16px; margin-bottom:12px; animation:fadein .25s; }
+  .exp-head { display:flex; align-items:center; gap:8px; margin-bottom:8px; }
+  .exp-badge { font-size:10.5px; font-weight:600; border-radius:999px; padding:2px 9px; white-space:nowrap; }
+  .exp-badge.ok { background:var(--green-light); color:var(--green-dark); }
+  .exp-badge.no { background:var(--bubble); color:var(--text-3); }
+  .exp-badge.type { background:#eef2ff; color:#4f46e5; }
+  .exp-time { font-size:11px; color:var(--text-3); margin-left:auto; white-space:nowrap; }
+  .exp-change { background:var(--code-bg); border:1px solid var(--border); border-radius:9px; padding:7px 11px; font-size:12px; font-family:"SF Mono", ui-monospace, Consolas, monospace; word-break:break-all; margin-bottom:8px; color:#1f2937; }
+  .exp-reason { font-size:12.5px; color:var(--text-2); border-left:3px solid var(--border-2); padding-left:10px; margin-bottom:10px; }
+  .exp-metrics { display:flex; gap:14px; flex-wrap:wrap; font-size:12px; color:var(--text-2); margin-bottom:8px; }
+  .exp-metrics b { font-size:12.5px; }
+  .delta-pos { color:var(--green-dark); } .delta-neg { color:#dc2626; }
+  .exp-plain { font-size:12.5px; color:var(--text-3); background:var(--side); border-radius:9px; padding:9px 12px; line-height:1.7; }
+  .ed-empty { text-align:center; color:var(--text-3); font-size:13px; padding:40px 20px; line-height:2; }
+
+  #toast { position:fixed; top:16px; left:50%; transform:translateX(-50%); background:var(--text); color:#fff; border-radius:10px; padding:9px 18px; font-size:13px; display:none; z-index:100; animation:fadein .25s; max-width:88vw; text-align:center; }
+
+  /* 移动端侧栏遮罩：点击空白处关闭 */
+  #sideMask { position:fixed; inset:0; background:rgba(0,0,0,.3); opacity:0; pointer-events:none; transition:opacity .25s; z-index:55; }
+  #sideMask.show { opacity:1; pointer-events:auto; }
+
+  @media (max-width: 860px) {
+    body { font-size:14.5px; }
+    #sidebar { position:fixed; z-index:56; height:100%; height:100dvh; padding-top:env(safe-area-inset-top,0px); box-shadow:8px 0 30px rgba(0,0,0,.1); }
+    #sidebar.hidden { margin-left:-244px; }
+    .hd-burger { display:block; padding:9px; }
+    header { height:54px; padding:0 10px 0 6px; }
+    .hd-title span { display:none; }
+    .evo-pill { font-size:11.5px; padding:6px 10px; }
+    .chat-inner { padding:20px 14px 10px; gap:18px; }
+    .msg-user { max-width:86%; }
+    .composer-wrap { padding-left:12px; padding-right:12px; }
+    .composer { border-radius:22px; padding:7px 7px 7px 13px; }
+    .composer textarea { font-size:16px; } /* 防 iOS 聚焦自动缩放 */
+    .c-btn { width:40px; height:40px; }
+    .composer-hint { display:none; }
+    .sug-grid { grid-template-columns:1fr; gap:9px; }
+    #welcome { padding-top:6vh; }
+    #welcome h1 { font-size:23px; }
+    .stat-grid { grid-template-columns:repeat(2,1fr); }
+    .ed-body { padding:14px 14px 30px; }
+    .exp-metrics { gap:10px; }
+    .tok-badge { display:none !important; }
+    .nav-item, .sb-new { padding-top:11px; padding-bottom:11px; }
+  }
+  /* 平板窄屏：侧栏常驻空间不足时同样走抽屉模式 */
+  @media (min-width: 861px) and (max-width: 1080px) {
+    #sidebar { width:210px; }
+    #sidebar.hidden { margin-left:-210px; }
+  }
+  /* 桌面宽屏：消息区与输入框保持居中节奏一致 */
+  @media (min-width: 1400px) {
+    .chat-inner, .composer, .composer-hint, #welcome { max-width:820px; }
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <aside id="sidebar">
+    <div class="sb-brand"><div class="logo">HW</div><b>HWJ Agent</b><span class="ver">v3.0.1</span></div>
+    <button class="sb-new" onclick="newChat()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+      新对话
+    </button>
+    <nav>
+      <div class="nav-item active" id="navChat" onclick="switchTab('chat')">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        对话
+      </div>
+      <div class="nav-item" onclick="openEvo()">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4m0 12v4M2 12h4m12 0h4M5 5l3 3m8 8 3 3m0-14-3 3m-8 8-3 3"/></svg>
+        进化中心
+        <span class="ni-badge" id="navEvoBadge">v0</span>
+      </div>
+      <div class="nav-item" onclick="window.open('/process','_blank')">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 15l2 2 4-4"/></svg>
+        执行过程
+      </div>
+      <div class="nav-item" onclick="window.open('/help','_blank')">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3M12 17h.01"/></svg>
+        帮助
+      </div>
+      <div class="sb-sec">进化档案</div>
+      <div style="padding:2px 10px;">
+        <div class="health" style="margin-top:2px;"><span class="dot" id="evoDotSample"></span><span id="evoSampleText">样本 0</span></div>
+        <div class="health"><span class="dot" id="evoDotExp"></span><span id="evoExpText">实验 0 次</span></div>
+      </div>
+    </nav>
+    <div class="sb-foot">
+      <div class="ws-row">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+        <select id="wsSelect" onchange="switchWorkspace(this.value)"></select>
+      </div>
+      <div class="health"><span class="dot" id="healthDot"></span><span id="healthText">连接中…</span></div>
+    </div>
+  </aside>
+
+  <main>
+    <header>
+      <button class="hd-burger" onclick="toggleSidebar()">☰</button>
+      <div class="hd-title"><b>HWJ Agent</b><span>自进化运行时 · 任务即证据</span></div>
+      <div class="grow"></div>
+      <span class="tok-badge" id="tokBadge"></span>
+      <div class="evo-pill" onclick="openEvo()" title="点击查看进化细节">
+        <span class="pulse" id="evoPulse"></span>
+        <span id="evoPillText">进化系统</span>
+      </div>
+    </header>
+
+    <div id="chat">
+      <div id="welcome">
+        <h1>有什么可以帮忙的？</h1>
+        <div class="sug-grid">
+          <div class="sug" onclick="quickAsk('创建 notes.txt，写 3 条今日待办，每条一行')"><b>写点东西</b><span>创建待办、笔记、文档</span></div>
+          <div class="sug" onclick="quickAsk('创建 students.csv（name,age,score 表头加 5 行数据），再创建 analysis.md 报告平均分和最高分学生')"><b>算点东西</b><span>数据文件与真实计算</span></div>
+          <div class="sug" onclick="quickAsk('创建 compare.md：用表格对比两种学习方法（记忆保持、耗时、适用场景），不少于 20 行')"><b>整理点东西</b><span>结构化对比与整理</span></div>
+          <div class="sug" onclick="openEvo()"><b>看看进化</b><span>Agent 如何从任务中变强</span></div>
+        </div>
+      </div>
+      <div class="chat-inner" id="msgs" style="display:none;"></div>
+    </div>
+
+    <div class="composer-wrap">
+      <div class="composer">
+        <button class="c-btn ghost" id="uploadBtn" title="上传文档（doc 插件可读取）" onclick="$('fileInput').click()">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+        </button>
+        <textarea id="input" rows="1" placeholder="给 Agent 一个任务，每个完成的任务都会成为进化证据…" oninput="autoGrow(this)"></textarea>
+        <button class="c-btn" id="sendBtn" onclick="send()" title="发送">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+        </button>
+        <button class="c-btn stop" id="stopBtn" onclick="stopGen()" title="停止生成">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
+        </button>
+      </div>
+      <div class="composer-hint">Agent 会自动使用工具、自我核验交付，并从每个任务中积累进化证据</div>
+      <input type="file" id="fileInput" multiple style="display:none">
+    </div>
+  </main>
+</div>
+
+<!-- 移动端侧栏遮罩 -->
+<div id="sideMask" onclick="toggleSidebar(false)"></div>
+
+<!-- 进化中心抽屉 -->
+<div id="evoMask" onclick="closeEvo()"></div>
+<div id="evoDrawer">
+  <div class="ed-head">
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2"><path d="M12 2v4m0 12v4M2 12h4m12 0h4M5 5l3 3m8 8 3 3m0-14-3 3m-8 8-3 3"/></svg>
+    <b>进化中心</b>
+    <button class="ed-close" onclick="closeEvo()">✕</button>
+  </div>
+    <div class="ed-body">
+      <div class="ed-running" id="edRunning"><span class="dna"></span><span>进化实验进行中 · <a href="javascript:void(0)" onclick="showLive()" style="color:var(--green-dark);text-decoration:underline;text-underline-offset:2px">查看实时进度</a></span></div>
+      <div id="liveView" style="display:none;"></div>
+      <div id="evoMain">
+      <div class="ed-promote" id="edPromote"></div>
+      <div class="stat-grid" id="edStats"></div>
+      <div class="ed-actions">
+        <button class="btn-main" id="edRunBtn" onclick="runEvolutionNow()">立即触发一次进化实验</button>
+        <button class="btn-sub" id="liveBtn" onclick="showLive()">进化过程</button>
+      </div>
+      <div class="ed-sec">实验时间线（新 → 旧）</div>
+      <div id="edTimeline"></div>
+      </div>
+    </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  function toast(m){ const t=$('toast'); t.textContent=m; t.style.display='block'; clearTimeout(t._h); t._h=setTimeout(()=>t.style.display='none',2600); }
+  async function api(path, opts){ const r=await fetch(path,opts); return r.json().catch(()=>({success:false,error:'HTTP '+r.status})); }
+
+  /* ---------- 轻量 Markdown 渲染（先整体转义防 XSS，再生成安全标记） ---------- */
+  function mdRender(src) {
+    const lines = esc(src).split('\n');
+    let html = '', i = 0, inCode = false, codeBuf = [], listStack = [];
+    const closeList = () => { while (listStack.length) html += listStack.pop() === 'ol' ? '</ol>' : '</ul>'; };
+    const inline = s => s
+      .replace(/`([^`]+)`/g, '<code>$1</code>')
+      .replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>')
+      .replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<i>$2</i>')
+      .replace(/\[([^\]]+)\]\((https?:[^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
+      .replace(FILE_LINK_RE, m => {
+        const href = (/\.md$/i.test(m) ? '/view/' : '/files/') + m.split('/').map(encodeURIComponent).join('/');
+        return `<a href="${href}" target="_blank" rel="noopener">${m}</a>`;
+      });
+    for (; i < lines.length; i++) {
+      const line = lines[i];
+      if (/^```/.test(line)) {
+        if (inCode) { html += `<pre><code>${codeBuf.join('\n')}</code></pre>`; codeBuf = []; inCode = false; }
+        else { closeList(); inCode = true; }
+        continue;
+      }
+      if (inCode) { codeBuf.push(line); continue; }
+      if (/^\s*$/.test(line)) { closeList(); continue; }
+      const h = line.match(/^(#{1,4})\s+(.*)/);
+      if (h) { closeList(); const lv = Math.min(h[1].length + 1, 4); html += `<h${lv}>${inline(h[2])}</h${lv}>`; continue; }
+      if (/^\s*(-{3,}|\*{3,})\s*$/.test(line)) { closeList(); html += '<hr style="border:none;border-top:1px solid var(--border);margin:10px 0">'; continue; }
+      if (/^&gt;\s?/.test(line)) { closeList(); html += `<blockquote>${inline(line.replace(/^&gt;\s?/, ''))}</blockquote>`; continue; }
+      if (/^\s*[-*+]\s+/.test(line)) {
+        if (listStack[listStack.length-1] !== 'ul') { closeList(); html += '<ul>'; listStack.push('ul'); }
+        html += `<li>${inline(line.replace(/^\s*[-*+]\s+/, ''))}</li>`; continue;
+      }
+      if (/^\s*\d+[.)]\s+/.test(line)) {
+        if (listStack[listStack.length-1] !== 'ol') { closeList(); html += '<ol>'; listStack.push('ol'); }
+        html += `<li>${inline(line.replace(/^\s*\d+[.)]\s+/, ''))}</li>`; continue;
+      }
+      if (/^\s*\|.*\|\s*$/.test(line)) {
+        closeList();
+        const cells = l => l.trim().replace(/^\||\|$/g,'').split('|').map(c => c.trim());
+        if (/^\s*\|[\s:|-]+\|\s*$/.test(lines[i+1] || '')) {
+          const head = cells(line); i += 2;
+          let rows = '';
+          while (i < lines.length && /^\s*\|.*\|\s*$/.test(lines[i])) { rows += '<tr>' + cells(lines[i]).map(c=>`<td>${inline(c)}</td>`).join('') + '</tr>'; i++; }
+          i--;
+          html += `<table><thead><tr>${head.map(c=>`<th>${inline(c)}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table>`; continue;
+        }
+      }
+      closeList();
+      const prev = html;
+      html += `<p>${inline(line)}</p>`;
+      if (prev === html && !html) html = `<p>${inline(line)}</p>`;
+    }
+    if (codeBuf.length) html += `<pre><code>${codeBuf.join('\n')}</code></pre>`;
+    closeList();
+    return html || '<p></p>';
+  }
+  const FILE_LINK_RE = /(uploads\/[A-Za-z0-9_\-.%\u4e00-\u9fff]+|[A-Za-z0-9_\-\u4e00-\u9fff]+\.(?:md|txt|png|jpe?g|gif|webp|bmp|svg|csv|pdf|html?|json|xml|docx|xlsx|zip))/g;
+
+  /* ---------- 消息 ---------- */
+  function scrollBottom(){ const b=$('chat'); if (b.scrollHeight - b.scrollTop - b.clientHeight < 400) b.scrollTop = b.scrollHeight; }
+  function showChat(welcome) { $('welcome').style.display = welcome ? '' : 'none'; $('msgs').style.display = welcome ? 'none' : 'flex'; }
+  function addMsg(cls, html) {
+    showChat(false);
+    const d = document.createElement('div');
+    d.className = cls;
+    if (cls === 'msg-assistant') d.innerHTML = '<div class="avatar">H</div><div class="body"></div>';
+    else d.innerHTML = html;
+    $('msgs').appendChild(d);
+    scrollBottom();
+    return cls === 'msg-assistant' ? d.querySelector('.body') : d;
+  }
+  function addUser(text){ addMsg('msg-user', esc(text)); }
+  function addSystem(text){ addMsg('msg-system', esc(text)); }
+  function addError(text){ addMsg('msg-error', esc(text)); }
+
+  /* ---------- SSE ---------- */
+  async function streamSSE(path, body, onEvent, signal) {
+    const r = await fetch(path, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body), signal });
+    if (!r.ok || !r.body) throw new Error('HTTP ' + r.status);
+    const rd = r.body.getReader(), dec = new TextDecoder();
+    let buf = '';
+    for (;;) {
+      const { done, value } = await rd.read();
+      if (done) break;
+      buf += dec.decode(value, { stream:true });
+      let i;
+      while ((i = buf.indexOf('\n')) >= 0) {
+        const line = buf.slice(0, i).trim(); buf = buf.slice(i + 1);
+        if (!line.startsWith('data:')) continue;
+        try { onEvent(JSON.parse(line.slice(5).trim())); } catch {}
+      }
+    }
+  }
+
+  /* ---------- 发送 ---------- */
+  let busy = false, innerAbortCtrl = null;
+  function autoGrow(t){ t.style.height='auto'; t.style.height=Math.min(t.scrollHeight,180)+'px'; }
+  function quickAsk(t){ if (busy) return; $('input').value=t; autoGrow($('input')); send(); }
+  function stopGen(){ if (innerAbortCtrl) innerAbortCtrl.abort(); }
+  // 插件名 → 用户视角的自然语言（技术细节不暴露）
+  const PLUGIN_VERB = { write:'正在写入文件', edit:'正在修改文件', read:'正在查看文件', verify:'正在核验交付质量', memory:'正在回忆相关经验', todo:'正在规划步骤', calc:'正在计算', stat:'正在统计', bash:'正在执行命令', shell:'正在执行命令', skill:'正在应用技能', doc:'正在阅读文档', search:'正在检索', list:'正在查看目录' };
+  function busyText(plugin){
+    const v = PLUGIN_VERB[String(plugin||'').toLowerCase()] || '正在处理';
+    return v + '…';
+  }
+  function addBusy(){
+    showChat(false);
+    const d = document.createElement('div');
+    d.className = 'busy-bar';
+    d.innerHTML = '<span class="spinner"></span><span class="bt">正在思考…</span>';
+    $('msgs').appendChild(d);
+    scrollBottom();
+    return d;
+  }
+  function fadeBusy(bar){ if (!bar) return; bar.classList.add('fade'); setTimeout(()=>bar.remove(), 550); }
+
+  async function send() {
+    if (busy) return;
+    const input = $('input');
+    const text = input.value.trim();
+    if (!text) return;
+    let finalText = text;
+    if (pendingUploads.length) {
+      finalText += `\n\n[已上传文档] 本次任务可用 doc 插件处理以下文件（doc.read 读内容 / doc.search 检索）：\n${pendingUploads.map(p=>'- '+p).join('\n')}`;
+      pendingUploads = [];
+    }
+    busy = true; input.value=''; autoGrow(input); input.disabled = true;
+    $('sendBtn').style.display='none'; $('stopBtn').classList.add('show');
+    addUser(text);
+    const body = addMsg('msg-assistant', '');
+    body.classList.add('typing-cursor');
+    let live = '', busyBar = addBusy();
+    innerAbortCtrl = new AbortController();
+    const paint = () => { body.innerHTML = mdRender(live); body.classList.add('typing-cursor'); scrollBottom(); };
+    try {
+      await streamSSE('/api/inner/chat', { message: finalText }, ev => {
+        if (ev.type === 'text') { fadeBusy(busyBar); live = ev.text; paint(); }
+        else if (ev.type === 'usage') {
+          const t = ev.totals||{}, k = n => n>=1000 ? (n/1000).toFixed(1)+'K' : String(n||0);
+          const b = $('tokBadge'); b.style.display='inline';
+          b.textContent = `${k(t.prompt)}+${k(t.completion)} tok · ${t.calls} 次调用`;
+          b.title = `prompt ${t.prompt} tok，completion ${t.completion} tok`;
+        }
+        else if (ev.type === 'info') {
+          // 交付核验结论折叠为处理中指示的一句话，其余系统细节不打扰对话
+          const t = String(ev.text||'');
+          if (/交付核验\] 发现/.test(t) && busyBar) busyBar.querySelector('.bt').textContent = '发现细节待完善，正在自动修正…';
+          else if (/限流|429/.test(t) && busyBar) busyBar.querySelector('.bt').textContent = '服务繁忙，正在自动重试…';
+        }
+        else if (ev.type === 'tool_call' || ev.type === 'tool_result') {
+          if (busyBar && ev.type === 'tool_call') busyBar.querySelector('.bt').textContent = busyText(ev.plugin);
+        }
+        else if (ev.type === 'error') { addError(ev.content); }
+      });
+    } catch (e) {
+      if (e.name !== 'AbortError') addError(e.message);
+      else addSystem('已停止');
+    }
+    fadeBusy(busyBar);
+    body.classList.remove('typing-cursor');
+    if (!live && !busyBar) body.closest('.msg-assistant')?.remove();
+    busy = false; innerAbortCtrl = null;
+    input.disabled = false; $('sendBtn').style.display='flex'; $('stopBtn').classList.remove('show');
+    input.focus();
+    refreshEvoSilent();
+  }
+
+  /* ---------- 进化过程实时视图 ---------- */
+  let liveTimer = null, liveElapsedTimer = null;
+  function stopLivePoll(){ if (liveTimer) { clearInterval(liveTimer); liveTimer=null; } if (liveElapsedTimer) { clearInterval(liveElapsedTimer); liveElapsedTimer=null; } }
+  function fmtDur(sec){ const m=Math.floor(sec/60), s=sec%60; return m>0 ? `${m} 分 ${s} 秒` : `${s} 秒`; }
+
+  function showLive(){
+    $('evoMain').style.display='none';
+    $('liveView').style.display='';
+    $('liveView').innerHTML = '<div class="ed-empty">正在获取进度…</div>';
+    stopLivePoll();
+    const tick = async () => {
+      let d; try { d = await api('/api/evolution/live'); } catch { return; }
+      const v = $('liveView'); if (!v || !v.offsetParent) { stopLivePoll(); return; }
+      if (!d.active && d.phase === 'idle') {
+        v.innerHTML = `<div class="ed-empty">当前没有进行中的实验<br>每个任务都会成为进化证据，<br>证据足够时实验自动开始。</div>
+          <div class="ed-actions"><button class="btn-main" onclick="backToMain()">返回概览</button></div>`;
+        stopLivePoll(); return;
+      }
+      if (d.phase === 'done') {
+        const s = d.summary||{}, md = Number(s.meanDelta)||0, ok = !!d.promoted;
+        v.innerHTML = `<div class="exp-card" style="animation:fadein .3s">
+            <div class="exp-head">${ok?'<span class="exp-badge ok">已进化</span>':'<span class="exp-badge no">未采用</span>'}<span class="exp-time">刚刚结束</span></div>
+            <div class="exp-metrics">
+              <span>效果 <b class="${md<0?'delta-neg':'delta-pos'}">${esc(pctf(md))}</b></span>
+              <span>胜率 <b>${Math.round((Number(s.winRate)||0)*100)}%</b></span>
+              <span>样本 <b>${s.n||0}</b></span>
+              <span>回退 <b>${s.regressions||0}</b></span>
+            </div>
+            <div class="exp-plain">${ok ? `实验证明改进有效，Agent 已升级${d.promoted?('到 v'+d.promoted.version):''}。` : '实验未证明改进足够好，Agent 保持当前版本继续观察。'}</div>
+          </div>
+          <div class="ed-actions"><button class="btn-main" onclick="backToMain();refreshEvo()">返回概览</button></div>`;
+        stopLivePoll(); return;
+      }
+      // running：进度条 + 动态计时
+      const done=d.done||0, total=d.total||0, pctW = total ? Math.round(done/total*100) : 0;
+      v.innerHTML = `<div class="exp-card">
+          <div class="exp-head"><span class="exp-badge type">实验进行中</span><span class="exp-time" id="lvElapsed"></span></div>
+          <div class="exp-change">${esc(d.mutation?.target || '候选策略')} 与当前版本同题对比</div>
+          <div style="background:var(--side);border-radius:999px;height:9px;overflow:hidden;margin:10px 0 8px;">
+            <div style="background:linear-gradient(90deg,var(--green),#34d399);height:100%;width:${pctW}%;border-radius:999px;transition:width .6s;"></div>
+          </div>
+          <div style="font-size:12.5px;color:var(--text-2);margin-bottom:10px;">
+            <span class="spinner" style="display:inline-block;vertical-align:-2px;margin-right:7px;"></span>
+            ${total ? `正在逐个对比任务表现 · ${done}/${total} 已完成` : '正在准备实验环境…'}
+          </div>
+          <div class="exp-plain">同一批任务会分别在当前版本和候选版本上真实执行，逐个比较质量。整个过程自动完成，通常需要几分钟。</div>
+        </div>
+        <div class="ed-actions"><button class="btn-sub" onclick="backToMain()">返回概览</button></div>`;
+      const el = $('lvElapsed'); if (el) el.textContent = '已进行 ' + fmtDur(d.elapsedSec||0);
+      if (!liveElapsedTimer) liveElapsedTimer = setInterval(() => { const e=$('lvElapsed'); if (e) { d.elapsedSec=(d.elapsedSec||0)+1; e.textContent='已进行 '+fmtDur(d.elapsedSec); } }, 1000);
+    };
+    tick(); liveTimer = setInterval(tick, 3000);
+  }
+
+  /* ---------- 进化中心 ---------- */
+
+  /* ---------- 进化中心 ---------- */
+  function openEvo(){ $('evoMask').classList.add('show'); $('evoDrawer').classList.add('show'); backToMain(); refreshEvo(); }
+  function closeEvo(){ $('evoMask').classList.remove('show'); $('evoDrawer').classList.remove('show'); stopLivePoll(); }
+  function backToMain(){ $('liveView').style.display='none'; $('evoMain').style.display=''; stopLivePoll(); }
+  const pctf = n => { const x=Number(n)||0; return (x>=0?'+':'')+(x*100).toFixed(1)+'%'; };
+  const fmtTime = ts => { const d=new Date(ts); return isNaN(d) ? String(ts||'') : d.toLocaleString('zh-CN',{hour12:false, month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit'}); };
+
+  let lastPromoteSeen = 0;
+  async function refreshEvoSilent(){ try { await renderEvo(true); } catch {} }
+  async function refreshEvo(){ await renderEvo(false); }
+
+  async function renderEvo(silent) {
+    const st = await api('/api/evolution/status');
+    if (!st.success) return;
+    const h = st.history || [], state = st.state || {};
+    const benchmarks = Number(st.benchmarks)||0, min = Number(st.minBenchmarks)||3;
+    const promoted = h.filter(x=>x.promotion&&x.promotion.ok).length;
+    const version = state.version || 0;
+    // 顶栏 pill + 侧栏徽标
+    $('evoPillText').textContent = st.running ? '进化实验进行中' : `v${version} · 样本 ${benchmarks} · 实验 ${h.length}`;
+    $('evoPulse').classList.toggle('live', !!st.running);
+    $('navEvoBadge').textContent = 'v' + version;
+    $('evoSampleText').textContent = `样本 ${benchmarks}${benchmarks>=min?'（已达标）':''}`;
+    $('evoDotSample').className = 'dot ' + (benchmarks>=min?'ok':'');
+    $('evoExpText').textContent = `实验 ${h.length} 次 · 晋级 ${promoted}`;
+    $('evoDotExp').className = 'dot ' + (promoted?'ok':'');
+    if (!$('evoDrawer').classList.contains('show')) return;
+    // 抽屉内部
+    $('edRunning').classList.toggle('show', !!st.running);
+    $('edRunBtn').disabled = !!st.running || !st.autoEvolve;
+    if (!st.running) { // 运行结束时轮询自动刷新（渲染由触发方处理）
+      if (renderEvo._wasRunning && !silent) { toast('进化实验已结束'); }
+    }
+    renderEvo._wasRunning = !!st.running;
+    $('edStats').innerHTML = `
+      <div class="stat"><b>v${version}</b><span>当前版本</span></div>
+      <div class="stat"><b>${benchmarks}</b><span>进化样本</span></div>
+      <div class="stat"><b>${h.length}</b><span>实验次数</span></div>
+      <div class="stat"><b style="color:${promoted?'var(--green)':'inherit'}">${promoted}</b><span>成功进化</span></div>`;
+    const lastPromote = h.find(x=>x.promotion&&x.promotion.ok);
+    if (lastPromote) {
+      if (lastPromoteSeen && lastPromote.experiment !== lastPromoteSeen) toast(`版本升级到 v${lastPromote.promotion.version}`);
+      lastPromoteSeen = lastPromote.experiment;
+      $('edPromote').className = 'ed-promote show';
+      $('edPromote').innerHTML = `<b>最新进化成果：v${lastPromote.promotion.version}</b><br>${esc(lastPromote.explanation?.whatChanged || '策略已升级')}<br><span style="opacity:.85;font-size:12px">实验 ${esc(lastPromote.experiment)} · ${esc(pctf(lastPromote.summary?.meanDelta))} 提升</span>`;
+    } else $('edPromote').className = 'ed-promote';
+    if (!h.length) {
+      $('edTimeline').innerHTML = `<div class="ed-empty">还没有进化实验记录<br>每个成功完成的任务都会存为「进化样本」，<br>累计 ${min} 个后自动开始 A/B 实验：候选策略与当前版本同题对比，<br>只有真正更好才会升级版本。</div>`;
+      return;
+    }
+    $('edTimeline').innerHTML = h.map(x => {
+      const m = x.mutation||{}, s = x.summary||{}, ok = !!(x.promotion&&x.promotion.ok), pass = !!s.pass;
+      const md = Number(s.meanDelta)||0;
+      const typeMap = { strategy:'策略', skill:'技能', plugin:'插件', prompt:'提示词' };
+      const changeText = typeof m.change === 'string' ? m.change : JSON.stringify(m.change);
+      const verdict = ok ? `<span class="exp-badge ok">已进化 → v${x.promotion.version}</span>` : pass ? '<span class="exp-badge ok">验证通过 · 未晋级</span>' : '<span class="exp-badge no">未采用</span>';
+      return `<div class="exp-card">
+        <div class="exp-head">${verdict}<span class="exp-badge type">${esc(typeMap[m.type]||m.type||'实验')}</span><span class="exp-time">${esc(fmtTime(x.createdAt))}</span></div>
+        ${changeText && changeText !== 'undefined' ? `<div class="exp-change">${esc(String(changeText).slice(0,220))}</div>` : ''}
+        ${m.reason ? `<div class="exp-reason">${esc(String(m.reason).slice(0,260))}</div>` : ''}
+        <div class="exp-metrics">
+          <span>效果 <b class="${md<0?'delta-neg':'delta-pos'}">${esc(pctf(md))}</b></span>
+          <span>胜率 <b>${Math.round((Number(s.winRate)||0)*100)}%</b></span>
+          <span>样本 <b>${s.n||0}</b></span>
+          <span>回退 <b>${s.regressions||0}</b></span>
+        </div>
+        ${x.explanation?.whatChanged ? `<div class="exp-plain">${esc(x.explanation.whatChanged)}${x.explanation.why ? ' —— ' + esc(x.explanation.why) : ''}</div>` : ''}
+      </div>`;
+    }).join('');
+  }
+
+  async function runEvolutionNow(){
+    const btn = $('edRunBtn');
+    btn.disabled = true; btn.textContent = '实验进行中…';
+    try {
+      const d = await api('/api/evolution/run', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ cases:10, promote:true }) });
+      const r = d.result || {};
+      if (r.stage === 'no-op') toast('Meta-Agent 判断证据不足，主动跳过本轮实验');
+      else if (r.stage === 'promoted') toast(`实验通过，已进化到 v${r.promotion?.version ?? ''}`);
+      else if (r.summary) toast(`实验结束：${r.summary.pass ? '通过' : '未达标，已拒绝'}`);
+      else toast(d.error || r.error || '实验已结束');
+    } catch (e) { toast('触发失败：' + e.message); }
+    btn.textContent = '立即触发一次进化实验';
+    refreshEvo();
+  }
+
+  /* ---------- 工作区 / 健康 / 历史恢复 ---------- */
+  async function loadWorkspaces(){
+    const d = await api('/api/workspaces');
+    if (!d.success) return;
+    $('wsSelect').innerHTML = (d.workspaces||[]).map(w=>`<option value="${esc(w.name)}" ${w.current?'selected':''}>${esc(w.name)}</option>`).join('');
+  }
+  async function switchWorkspace(name){
+    if (!name) return;
+    await api('/api/workspace/switch', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ name }) });
+    toast('已切换工作区：' + name);
+    newChat(true);
+  }
+  async function loadHealth(){
+    try {
+      const h = await api('/api/health');
+      $('healthDot').className = 'dot ' + (h.ok || h.success ? 'ok' : 'bad');
+      $('healthText').textContent = h.ok || h.success ? '服务运行中' : '服务异常';
+    } catch { $('healthDot').className='dot bad'; $('healthText').textContent='连接失败'; }
+  }
+  async function loadHistory(){
+    const d = await api('/api/inner/messages');
+    if (!d.success) return;
+    const msgs = d.messages || [];
+    if (!msgs.length) { showChat(true); return; }
+    showChat(false);
+    for (const m of msgs) {
+      if (m.role === 'user') addUser(m.content || '');
+      else if (m.role === 'assistant') { const b = addMsg('msg-assistant',''); b.innerHTML = mdRender(m.content || ''); }
+    }
+    const box = $('chat'); box.scrollTop = box.scrollHeight;
+  }
+  async function newChat(keepWs){
+    await api('/api/inner/reset', { method:'POST' });
+    $('msgs').innerHTML = ''; showChat(true);
+    $('tokBadge').style.display = 'none';
+    if (!keepWs) loadWorkspaces();
+  }
+
+  /* ---------- 上传 ---------- */
+  let pendingUploads = [];
+  $('fileInput').addEventListener('change', async () => {
+    const files = [...$('fileInput').files]; $('fileInput').value = '';
+    if (!files.length) return;
+    $('uploadBtn').disabled = true;
+    for (const f of files) {
+      if (f.size > 20*1024*1024) { toast(`${f.name} 超过 20MB 上限，已跳过`); continue; }
+      try {
+        const b64 = await new Promise((ok,no)=>{ const r=new FileReader(); r.onload=()=>ok(String(r.result).split(',')[1]); r.onerror=no; r.readAsDataURL(f); });
+        const j = await api('/api/upload', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ name:f.name, content:b64 }) });
+        if (j.success) { pendingUploads.push(j.path); toast(`已上传 ${j.name}，发送任务时自动附加`); }
+        else toast(j.error || '上传失败');
+      } catch (e) { toast('上传失败：' + e.message); }
+    }
+    $('uploadBtn').disabled = false;
+  });
+
+  /* ---------- 刷新恢复：服务端仍在执行任务时恢复锁定 ---------- */
+  async function recoverRunningTask(){
+    let d; try { d = await api('/api/process'); } catch { return; }
+    if (!d.running) return;
+    busy = true; $('input').disabled = true;
+    $('sendBtn').style.display='none'; $('stopBtn').classList.add('show');
+    const bar = document.createElement('div'); bar.className = 'tool-bar';
+    bar.innerHTML = '<span class="ic spinner"></span><span>任务执行中（页面刷新恢复）· 完整过程实时记录中</span>';
+    $('msgs').appendChild(bar); showChat(false); scrollBottom();
+    const timer = setInterval(async () => {
+      try { const s = await api('/api/process'); if (!s.running) { clearInterval(timer); bar.remove(); busy=false; $('input').disabled=false; $('sendBtn').style.display='flex'; $('stopBtn').classList.remove('show'); loadHistory(); refreshEvoSilent(); } } catch {}
+    }, 2500);
+  }
+
+  /* ---------- 侧栏（移动端抽屉式） ---------- */
+  function toggleSidebar(force) {
+    const sb = $('sidebar'), mask = $('sideMask');
+    const show = force !== undefined ? force : sb.classList.contains('hidden');
+    sb.classList.toggle('hidden', !show);
+    mask.classList.toggle('show', show && window.innerWidth <= 860);
+  }
+
+  /* ---------- 键盘 ---------- */
+  $('input').addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(); }
+  });
+
+  /* ---------- 启动 ---------- */
+  (async function init(){
+    if (window.innerWidth <= 860) $('sidebar').classList.add('hidden');
+    window.addEventListener('resize', () => {
+      if (window.innerWidth > 860) { $('sideMask').classList.remove('show'); $('sidebar').classList.remove('hidden'); }
+      else if (!$('sidebar').classList.contains('hidden')) $('sideMask').classList.add('show');
+    });
+    loadHealth(); loadWorkspaces(); loadHistory(); recoverRunningTask(); renderEvo(true);
+    setInterval(loadHealth, 15000);
+    setInterval(refreshEvoSilent, 8000);
+  })();
+</script>
+</body>
+</html>

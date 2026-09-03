@@ -1,0 +1,46 @@
+{
+  "name": "hwj-agent",
+  "version": "3.0.1",
+  "description": "HWJ Agent — Inner Agent 工作台 + 后台 Self-Improving Agent Loop + 用户中心进化史",
+  "main": "index.js",
+  "bin": {
+    "hwj-agent": "bin/hwj.js"
+  },
+  "files": [
+    "index.js",
+    "lib/",
+    "plugins/",
+    "hwj/",
+    "bin/",
+    "public/",
+    "server.js",
+    "hwj.command",
+    "hwj.bat",
+    "install.bat",
+    "uninstall.bat"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "agent",
+    "cli",
+    "tui",
+    "llm",
+    "openai",
+    "zero-dependency",
+    "memory",
+    "embeddings",
+    "rag"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/iamsamyiok/dual-agent.git"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "test": "node test/smoke.js && node test/hwj-smoke.js && node test/memory-smoke.js && node test/evolution-smoke.js && node test/evolution-e2e.js && node test/web-evolution-e2e.js",
+    "prepublishOnly": "node test/smoke.js && node test/hwj-smoke.js && node test/memory-smoke.js && node test/evolution-smoke.js && node test/evolution-e2e.js && node test/web-evolution-e2e.js"
+  }
+}

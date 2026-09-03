@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HWJ Agent 帮助文档</title>
+<style>
+:root{--ink:#1f2937;--sub:#64748b;--line:#e2e8f0;--blue:#2563eb;--bg:#f8fafc;--card:#fff;--green:#059669;--amber:#d97706;--red:#dc2626;--purple:#7c3aed}
+*{box-sizing:border-box}body{margin:0;font:14px/1.8 "PingFang SC","Microsoft YaHei",system-ui,sans-serif;color:var(--ink);background:var(--bg)}
+.wrap{max-width:1060px;margin:auto;padding:34px 20px 90px}h1{font-size:28px;margin:0 0 4px}.sub{color:var(--sub);margin-bottom:28px}h2{font-size:20px;margin:44px 0 14px;padding-left:10px;border-left:4px solid var(--blue)}h3{font-size:15.5px;margin:22px 0 8px}p{margin:8px 0}.card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:18px 20px;margin:14px 0}code{background:#eef2ff;color:#3730a3;padding:1px 6px;border-radius:4px;font-size:12.5px;font-family:ui-monospace,Menlo,Consolas,monospace}pre{background:#0f172a;color:#e2e8f0;padding:15px;border-radius:9px;overflow:auto;font-size:12px;line-height:1.65}table{width:100%;border-collapse:collapse;margin:10px 0;font-size:13px}th,td{border:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top}th{background:#f1f5f9;white-space:nowrap}ul{padding-left:22px}li{margin:3px 0}.toc{columns:2;column-gap:32px}.toc a{color:var(--blue);text-decoration:none;display:block;padding:2px 0}.toc a:hover{text-decoration:underline}.tag{display:inline-block;font-size:11px;border-radius:20px;padding:0 9px;margin-right:6px}.g{background:#d1fae5;color:#065f46}.a{background:#fef3c7;color:#92400e}.b{background:#dbeafe;color:#1e40af}.r{background:#fee2e2;color:#991b1b}.diagram{background:#fff;border:1px dashed #cbd5e1;border-radius:12px;padding:22px;margin:14px 0;overflow:auto}.flow{display:flex;align-items:center;justify-content:center;gap:7px;min-width:850px}.node{border:2px solid var(--blue);background:#eff6ff;border-radius:10px;padding:9px 14px;text-align:center;min-width:125px}.node b{display:block}.node span{font-size:11px;color:var(--sub)}.node.inner{border-color:var(--green);background:#ecfdf5}.node.outer{border-color:var(--purple);background:#f5f3ff}.node.store{border-color:var(--amber);background:#fffbeb}.arrow{color:#94a3b8;font-size:20px}.callout{border-left:4px solid var(--green);background:#f0fdf4}.warn{border-left:4px solid var(--amber);background:#fffbeb}.danger{border-left:4px solid var(--red);background:#fef2f2}.kbd{border:1px solid #cbd5e1;border-bottom-width:2px;border-radius:5px;padding:0 6px;background:#fff;font-size:12px}@media(max-width:700px){.toc{columns:1}.wrap{padding:24px 14px 60px}table{font-size:12px}.flow{justify-content:flex-start}}
+</style></head>
+<body><div class="wrap">
+<h1>HWJ Agent · 帮助文档</h1>
+<div class="sub">版本 <span id="ver"></span> · 以用户任务为中心的 Self-Improving Agent Runtime</div>
+
+<div class="card callout"><b>最重要的一句话：</b>你平时只需要和 <b>Inner Agent</b> 对话。系统会在后台积累任务经验、寻找改进机会、进行隔离实验，并在实验真正证明变好后自动升级。你不需要逐项审批它的修改。<b>🧬 进化史</b>负责把这些变化用人话告诉你；<b>🧩 插件</b>和<b>⚙ 设置</b>属于低频管理功能。</div>
+
+<div class="card"><b>目录</b><div class="toc">
+<a href="#quick">1. 五分钟上手</a><a href="#architecture">2. 整体架构</a><a href="#task">3. 一次任务到底发生什么</a><a href="#evolution">4. 什么时候会进化</a><a href="#history">5. 怎么看进化史</a><a href="#loop">6. Self-Improving Loop 完整过程</a><a href="#memory">7. 记忆系统</a><a href="#plugins">8. 插件系统</a><a href="#skills">9. Skills 技能系统</a><a href="#quality">10. 质量、安全与回滚</a><a href="#ui">11. 界面说明</a><a href="#config">12. 配置与环境变量</a><a href="#cli">13. 命令行</a><a href="#data">14. 数据保存在哪里</a><a href="#faq">15. 常见问题</a><a href="#dev">16. 开发者说明</a>
+</div></div>
+
+<h2 id="quick">1. 五分钟上手</h2>
+<div class="card"><h3>第一步：安装</h3><pre>npm install</pre><p>要求 Node.js 18 或更高版本。项目运行时尽量只使用 Node.js 内置能力，不依赖庞大的运行时框架。</p><h3>第二步：启动</h3><pre>npm start</pre><p>打开终端显示的本地地址，在网页中完成内层模型配置。内层 Agent 使用 OpenAI-compatible API；外层 Meta-Agent 使用 OpenCode CLI。</p><h3>第三步：直接聊天</h3><p>例如：</p><pre>读取项目里的 README.md，告诉我这个项目是做什么的，并指出最值得改进的地方。</pre><p>你不用告诉 Agent “请开始进化”。先正常完成真实任务即可。</p></div>
+<div class="card warn"><b>第一次为什么不会立刻进化？</b><p>系统默认至少积累 <b>3 个成功完成的 Benchmark</b> 才启动第一次正式实验。两个任务不足以形成可靠的 A/B 样本。第三个成功任务完成后，后台会异步启动 Evolution；实验本身可能需要一些时间。</p></div>
+
+<h2 id="architecture">2. 整体架构</h2>
+<div class="diagram"><div class="flow">
+<div class="node"><b>你</b><span>提出任务</span></div><div class="arrow">→</div><div class="node inner"><b>Inner Agent</b><span>真正干活</span></div><div class="arrow">→</div><div class="node store"><b>Experience</b><span>留下可复盘经验</span></div><div class="arrow">→</div><div class="node outer"><b>Meta-Agent</b><span>寻找改进假设</span></div><div class="arrow">→</div><div class="node store"><b>Evolution Lab</b><span>隔离实验</span></div><div class="arrow">→</div><div class="node inner"><b>新版本</b><span>通过才升级</span></div>
+</div></div>
+<div class="card"><p><b>Inner Agent</b> 是产品本身：理解用户、调用工具、读取/修改文件、验证结果并交付。</p><p><b>Meta-Agent（Outer Agent）</b> 是后台的“改进大脑”：它不负责日常替用户完成任务，而是观察历史任务，提出一个最小、可验证的变化。</p><p><b>Evolution Engine</b> 是实验与质量闸门：它不相信“看起来更好”，而是让原版本和候选版本重新完成同一批任务。</p></div>
+
+<h2 id="task">3. 一次任务到底发生什么</h2>
+<div class="card"><ol><li><b>理解任务：</b>提取任务目标、验收条件和预期交付物。</li><li><b>Recall：</b>从短期、长期、归档和语义记忆中找相关经验。</li><li><b>执行：</b>Inner Agent 根据需要调用插件，例如 read、write、edit、bash、search、verify。</li><li><b>验证：</b>任务结束前检查关键要求是否完成；缺失时自动返修。</li><li><b>交付：</b>把最终结果返回给用户。</li><li><b>归档：</b>成功任务会自动进入经验与 Benchmark 系统，供未来实验重放。</li></ol></div>
+
+<h2 id="evolution">4. 什么时候会进化？</h2>
+<div class="card"><table><tr><th>用户行为</th><th>后台行为</th><th>进化史</th></tr><tr><td>第 1 个成功任务</td><td>保存 Benchmark 1</td><td>没有正式实验记录，正常</td></tr><tr><td>第 2 个成功任务</td><td>保存 Benchmark 2</td><td>继续收集样本</td></tr><tr><td>第 3 个成功任务</td><td>保存 Benchmark 3，自动启动 Evolution</td><td>实验完成后出现第一条记录</td></tr><tr><td>之后继续使用</td><td>持续增加样本，并在后台寻找新的改进机会</td><td>按时间倒序记录每次实验</td></tr></table><p><span class="tag g">默认</span> 自动 Evolution 已开启。无需设置 <code>DUAL_AGENT_AUTO_EVOLVE=1</code>；只有设置为 <code>0</code> 才关闭。</p><p><span class="tag g">默认</span> 自动 Promote 也开启。只有候选版本通过实验和 Regression Guard 才会升级。</p></div>
+<div class="card warn"><b>“第三个任务到了，但仍然没有进化史”怎么办？</b><ol><li>确认第三个任务确实正常完成，而不是中断/报错。</li><li>打开“🧬 进化史”，看顶部的 Benchmark 进度。</li><li>后台实验需要调用 OpenCode Meta-Agent。如果没有检测到外层引擎，系统不会伪造一条成功进化记录。</li><li>可以执行 <code>hwj-agent evolve</code> 手动触发并查看终端错误。</li></ol></div>
+
+<h2 id="history">5. 怎么看懂“🧬 进化史”</h2>
+<div class="card"><p>进化史按<b>时间倒序</b>显示最新实验。它不是开发者 JSON 日志，而是面向用户的变化说明。</p><table><tr><th>页面内容</th><th>用户应该怎么理解</th></tr><tr><td>发生了什么</td><td>这次具体改变了哪一部分，例如“调整记忆召回策略”。</td></tr><tr><td>为什么变化</td><td>Agent 从过去任务中观察到了什么问题。</td></tr><tr><td>Agent 的假设</td><td>它认为哪一种小改动可能解决问题。</td></tr><tr><td>实际结果</td><td>候选版本重新完成历史任务后，相对原版本提高了多少、赢了多少。</td></tr><tr><td>最后怎么处理</td><td>通过并自动升级，或者没有证明更好而继续使用原版本。</td></tr></table><p>例如一条记录可以被理解成：</p><pre>为什么改？
+→ 最近几个任务的历史经验召回不足。
+
+改了什么？
+→ 调整 memory recall 策略。
+
+怎么证明？
+→ 用同一批历史任务跑 Baseline 和 Candidate。
+
+结果？
+→ Candidate 平均 +8.4%，12 个任务中赢了 10 个。
+
+最后？
+→ 通过 Regression Guard，自动升级到下一版本。</pre></div>
+
+<h2 id="loop">6. Self-Improving Loop 完整过程</h2>
+<div class="card"><table><tr><th>阶段</th><th>作用</th></tr><tr><td>Observe</td><td>观察真实任务、工具表现、交付结果和历史经验。</td></tr><tr><td>Diagnose</td><td>寻找重复失败、低效步骤或能力瓶颈。</td></tr><tr><td>Hypothesize</td><td>提出一个可以被实验否证的改进假设。</td></tr><tr><td>Mutate</td><td>只做尽量小的单变量变化，可作用于插件、提示、Skill、策略或记忆召回。</td></tr><tr><td>Sandbox</td><td>候选变化在隔离目录/独立进程中运行，不直接污染生产。</td></tr><tr><td>A/B</td><td>同一批 Benchmark 分别运行 Baseline 和 Candidate。</td></tr><tr><td>Evaluate</td><td>结合任务结果、产出文件、工具过程指标和可用的 LLM Judge 进行评分。</td></tr><tr><td>Regression Guard</td><td>检查平均提升、胜率和严重回归，避免“平均看起来好但某类任务坏掉”。</td></tr><tr><td>Promote</td><td>只有通过质量闸门的候选版本才进入下一版本。</td><tr><td>Learn</td><td>成功与失败的实验都会写入 Evolution Experience，供下一轮参考。</td></tr></table></div>
+<div class="card callout"><b>核心原则：</b>“修改”不等于“进化”。只有“修改 → 实验 → 证明更好 → 采用”才算一次真正的进化。</div>
+
+<h2 id="memory">7. 记忆系统</h2>
+<div class="card"><p>Agent 不只是依赖当前聊天窗口。项目提供多层经验检索：</p><ul><li><b>短期记忆：</b>当前工作上下文中的近期信息。</li><li><b>长期记忆：</b>稳定、值得长期保留的经验。</li><li><b>任务归档：</b>用户任务与最终交付，可作为未来任务的经验来源。</li><li><b>关键词/BM25：</b>适合明确词汇和任务名称。</li><li><b>Embedding：</b>适合语义相似但措辞不同的历史经验。</li><li><b>RRF：</b>将不同检索结果进行融合排序。</li></ul><p>记忆的意义不是“把所有历史都塞给模型”，而是让 Agent 在当前任务需要时找到少量真正相关的经验。</p></div>
+
+<h2 id="plugins">8. 插件系统</h2>
+<div class="card"><p>插件是 Agent 的“手”。每个插件通常承担一个清晰职责，并向模型声明参数 Schema 和执行入口。</p><table><tr><th>类别</th><th>典型能力</th></tr><tr><td>文件</td><td>read / write / edit</td></tr><tr><td>命令</td><td>bash / shell 类任务</td></tr><tr><td>搜索</td><td>本地或配置好的搜索能力</td></tr><tr><td>验证</td><td>verify 等质量检查</td></tr><tr><td>记忆</td><td>recall / archive 等经验操作</td></tr></table><p>日常使用不需要管理插件。点击顶部 <b>🧩 插件</b> 才进入插件管理页面。插件的源码编辑、导入、AI 修复等属于低频维护功能。</p></div>
+
+<h2 id="skills">9. Skills 技能系统</h2>
+<div class="card"><p>插件解决“能做什么”，Skill 更接近“应该怎么做”。Skill 可以提供某类任务的工作方法、约束、检查清单和最佳实践。</p><p>Self-Improvement 可以针对 Skill 做实验。例如发现某类任务经常遗漏最终验证，可以提出一个更强的验证 Skill，然后用历史任务比较效果。</p></div>
+
+<h2 id="quality">10. 质量、安全与回滚</h2>
+<div class="card"><h3>为什么 Candidate 不直接覆盖当前版本？</h3><p>因为 Agent 很容易产生“局部变好、整体变坏”的修改。Candidate 会在实验目录中运行，生产环境保持不变。</p><h3>Regression Guard</h3><p>默认门槛包括最低样本数、平均提升、胜率以及严重回归限制。具体参数可通过环境变量调整。</p><h3>回滚</h3><p>插件类 Promote 复用快照/预检/热加载管线；出现问题可以回滚到之前的状态。策略类进化则以 Evolution State 的版本方式保存。</p></div>
+<div class="card danger"><b>安全边界：</b>自动进化的目标是让 Agent 在已有能力边界内更稳定、更高效，而不是让它无条件获得系统权限。涉及高风险生产环境时，应关闭自动 Promote，并增加人工 Gate、代码审查或外部 CI。</div>
+
+<h2 id="ui">11. 界面说明</h2>
+<div class="card"><table><tr><th>按钮</th><th>用途</th><th>日常频率</th></tr><tr><td>聊天区域</td><td>与 Inner Agent 完成真实工作</td><td><span class="tag g">每天</span></td></tr><tr><td>🧬 进化史</td><td>查看 Agent 最近发生了什么变化以及为什么</td><td><span class="tag b">偶尔</span></td></tr><tr><td>🧩 插件</td><td>查看、编辑、导入和维护插件</td><td><span class="tag a">低频</span></td></tr><tr><td>⚙ 设置</td><td>模型、API、工作区等基础配置</td><td><span class="tag a">低频</span></td></tr><tr><td>帮助</td><td>查看本说明</td><td><span class="tag b">需要时</span></td></tr></table><p>Outer Agent 不再作为日常聊天窗口占据主界面。它是后台 Meta-Agent 的实现入口；用户主要通过“进化史”理解它产生的变化。</p></div>
+
+<h2 id="config">12. 配置与环境变量</h2>
+<div class="card"><table><tr><th>变量</th><th>作用</th><th>默认</th></tr><tr><td><code>DUAL_AGENT_AUTO_EVOLVE</code></td><td>是否自动触发 Evolution；设为 0 关闭</td><td>开启</td></tr><tr><td><code>DUAL_AGENT_AUTO_PROMOTE</code></td><td>实验通过后是否自动升级；设为 0 关闭</td><td>开启</td></tr><tr><td><code>DUAL_AGENT_EVOLUTION_MIN_CASES</code></td><td>第一次正式实验所需最少 Benchmark</td><td>3</td></tr><tr><td><code>DUAL_AGENT_EVOLUTION_MAX_CASES</code></td><td>最多保留/使用的 Benchmark 数量</td><td>50</td></tr><tr><td><code>DUAL_AGENT_EVOLUTION_MIN_DELTA</code></td><td>最低平均提升阈值</td><td>0.03</td></tr><tr><td><code>DUAL_AGENT_EVOLUTION_MIN_WIN_RATE</code></td><td>最低胜率</td><td>0.60</td></tr><tr><td><code>DUAL_AGENT_EVOLUTION_MAX_REGRESSION</code></td><td>允许的单案例严重回归阈值</td><td>0.08</td></tr><tr><td><code>DUAL_AGENT_MOCK</code></td><td>演示/测试模式</td><td>关闭</td></tr><tr><td><code>DUAL_AGENT_OPENCODE_CMD</code></td><td>指定外层 OpenCode 命令</td><td>自动检测</td></tr></table><p>生产环境建议先保持默认设置。若希望完全停止自动自我修改，可使用：</p><pre>DUAL_AGENT_AUTO_EVOLVE=0
+DUAL_AGENT_AUTO_PROMOTE=0</pre></div>
+
+<h2 id="cli">13. 命令行</h2>
+<div class="card"><pre># 启动 Web
+npm start
+
+# 执行一次任务
+hwj-agent run "分析 README.md"
+
+# 手动运行一次 Evolution
+hwj-agent evolve
+
+# 手动 Evolution，并允许通过门槛后 Promote
+hwj-agent evolve --promote
+
+# 安静执行
+node hwj/hwj.js --script "读取 hello.txt" --quiet</pre><p>Web UI 自动进化和命令行 Evolution 使用同一个 Evolution Engine。</p></div>
+
+<h2 id="data">14. 数据保存在哪里</h2>
+<div class="card"><pre>.data/
+├── evolution/
+│   ├── benchmarks/       # 可重放任务样本
+│   ├── experiments/      # 每次实验及 A/B 结果
+│   ├── state.json        # 当前进化版本/状态
+│   ├── leaderboard.json  # 实验表现排名
+│   └── experience.jsonl  # 进化经验
+├── config.json            # 本地配置
+└── ...                    # 运行时记忆、审计等
+
+workspaces/
+└── default/               # 用户工作区</pre><p>这些运行数据不应该进入源码发布包。清洁源码 ZIP 不包含 <code>node_modules</code>、<code>.data</code>、工作区运行数据和 <code>.git</code>。</p></div>
+
+<h2 id="faq">15. 常见问题</h2>
+<div class="card"><h3>Q：我聊天两次，为什么没有进化？</h3><p>A：正常。默认至少需要 3 个成功 Benchmark。系统宁可多收集一点真实任务，也不根据两个样本乱改 Agent。</p><h3>Q：第三个任务完成后是不是一定升级？</h3><p>A：不是。第三个任务只是允许启动实验。Meta-Agent 可能认为没有可靠改进点，或者 Candidate 没有通过 A/B 和 Regression Guard。此时原版本继续工作。</p><h3>Q：进化会不会直接改坏我的程序？</h3><p>A：Candidate 先在隔离实验环境中验证；只有通过质量闸门才 Promote。插件 Promote 还会经过现有的快照/预检/热加载管线。</p><h3>Q：为什么进化史还是空的？</h3><p>A：最常见原因是 Benchmark 尚未达到最低数量，或者外层 OpenCode 没有配置/无法启动。进化史只记录正式实验，不会为了让页面“有数据”而伪造成功。</p><h3>Q：可以关闭自动进化吗？</h3><p>A：可以：<code>DUAL_AGENT_AUTO_EVOLVE=0</code>。也可以只关闭自动升级：<code>DUAL_AGENT_AUTO_PROMOTE=0</code>。</p><h3>Q：我能手动实验吗？</h3><p>A：可以运行 <code>hwj-agent evolve</code>。手动和自动使用同一套 Benchmark、A/B、Evaluator 和 Regression Guard。</p><h3>Q：插件是不是每次都要我自己选？</h3><p>A：不需要。插件是 Agent 的工具层，正常任务由 Agent 自己选择。用户只有在维护系统时才进入 🧩 插件。</p><h3>Q：这个项目和普通 Agent 有什么根本区别？</h3><p>A：普通 Agent 的循环通常是“任务 → 执行 → 结果”。这里增加了第二个闭环：“真实任务 → 经验 → 假设 → 候选 → 实验 → 评价 → 晋级/丢弃”，让系统可以基于真实使用结果持续寻找下一版本。</p></div>
+
+<h2 id="dev">16. 开发者说明</h2>
+<div class="card"><p>主要目录：</p><pre>lib/inner.js             # Inner Agent 工具调用循环
+lib/outer.js             # Meta-Agent / OpenCode 运行入口
+lib/evolution.js         # Evolution Engine
+lib/evolution-worker.js  # 隔离实验 Worker
+lib/approval.js          # 快照、预检、热加载、回滚
+lib/plugins.js           # 插件运行时
+lib/intent.js            # 意图与验收条件
+hwj/core.js              # 任务生命周期
+server.js                # Web API / SSE / UI 服务
+public/index.html        # 主界面
+public/help.html         # 本帮助文档</pre><p>如果你继续开发，建议保持一个原则：<b>不要把“进化逻辑”和“用户日常操作”混在一起。</b>用户只消费结果；系统自己负责观察、实验、验证和版本管理。</p></div>
+
+<div class="card callout"><b>最后总结：</b>把 HWJ Agent 想成一个会工作的数字员工。你给它任务，它负责完成；它把完成过的任务留下来；当积累了足够证据，它会在后台提出一个小改动并自己做实验；实验真的证明变好，它才升级；失败则继续使用旧版本。你只需要偶尔打开“🧬 进化史”，看看它最近学会了什么。</div>
+</div>
+<script>fetch('/api/health').then(r=>r.json()).then(d=>{document.getElementById('ver').textContent=d.version||'3.0.0'}).catch(()=>{document.getElementById('ver').textContent='3.0.0'});</script>
+</body></html>

@@ -1,0 +1,130 @@
+{
+  "docx": {
+    "source": "github:anthropics/skills",
+    "ref": "main",
+    "dir": "docx",
+    "files": 61,
+    "bytes": 1128695,
+    "installedAt": "2026-08-21T04:46:27.024Z"
+  },
+  "brainstorming": {
+    "source": "github:obra/superpowers",
+    "ref": "HEAD",
+    "dir": "brainstorming",
+    "files": 8,
+    "bytes": 80159,
+    "installedAt": "2026-08-21T04:46:35.753Z"
+  },
+  "dispatching-parallel-agents": {
+    "source": "github:obra/superpowers",
+    "ref": "HEAD",
+    "dir": "dispatching-parallel-agents",
+    "files": 1,
+    "bytes": 6078,
+    "installedAt": "2026-08-21T04:46:35.753Z"
+  },
+  "executing-plans": {
+    "source": "github:obra/superpowers",
+    "ref": "HEAD",
+    "dir": "executing-plans",
+    "files": 1,
+    "bytes": 2305,
+    "installedAt": "2026-08-21T04:46:35.754Z"
+  },
+  "finishing-a-development-branch": {
+    "source": "github:obra/superpowers",
+    "ref": "HEAD",
+    "dir": "finishing-a-development-branch",
+    "files": 1,
+    "bytes": 7781,
+    "installedAt": "2026-08-21T04:46:35.754Z"
+  },
+  "receiving-code-review": {
+    "source": "github:obra/superpowers",
+    "ref": "HEAD",
+    "dir": "receiving-code-review",
+    "files": 1,
+    "bytes": 6203,
+    "installedAt": "2026-08-21T04:46:35.754Z"
+  },
+  "requesting-code-review": {
+    "source": "github:obra/superpowers",
+    "ref": "HEAD",
+    "dir": "requesting-code-review",
+    "files": 2,
+    "bytes": 8625,
+    "installedAt": "2026-08-21T04:46:35.755Z"
+  },
+  "subagent-driven-development": {
+    "source": "github:obra/superpowers",
+    "ref": "HEAD",
+    "dir": "subagent-driven-development",
+    "files": 7,
+    "bytes": 56664,
+    "installedAt": "2026-08-21T04:46:35.755Z"
+  },
+  "systematic-debugging": {
+    "source": "github:obra/superpowers",
+    "ref": "HEAD",
+    "dir": "systematic-debugging",
+    "files": 11,
+    "bytes": 40772,
+    "installedAt": "2026-08-21T04:46:35.757Z"
+  },
+  "test-driven-development": {
+    "source": "github:obra/superpowers",
+    "ref": "HEAD",
+    "dir": "test-driven-development",
+    "files": 2,
+    "bytes": 17283,
+    "installedAt": "2026-08-21T04:46:35.758Z"
+  },
+  "using-git-worktrees": {
+    "source": "github:obra/superpowers",
+    "ref": "HEAD",
+    "dir": "using-git-worktrees",
+    "files": 1,
+    "bytes": 6813,
+    "installedAt": "2026-08-21T04:46:35.758Z"
+  },
+  "using-superpowers": {
+    "source": "github:obra/superpowers",
+    "ref": "HEAD",
+    "dir": "using-superpowers",
+    "files": 6,
+    "bytes": 17169,
+    "installedAt": "2026-08-21T04:46:35.758Z"
+  },
+  "verification-before-completion": {
+    "source": "github:obra/superpowers",
+    "ref": "HEAD",
+    "dir": "verification-before-completion",
+    "files": 1,
+    "bytes": 3646,
+    "installedAt": "2026-08-21T04:46:35.758Z"
+  },
+  "writing-plans": {
+    "source": "github:obra/superpowers",
+    "ref": "HEAD",
+    "dir": "writing-plans",
+    "files": 2,
+    "bytes": 8766,
+    "installedAt": "2026-08-21T04:46:35.758Z"
+  },
+  "writing-skills": {
+    "source": "github:obra/superpowers",
+    "ref": "HEAD",
+    "dir": "writing-skills",
+    "files": 7,
+    "bytes": 107377,
+    "installedAt": "2026-08-21T04:46:35.759Z"
+  },
+  "pdf": {
+    "source": "github:anthropics/skills",
+    "ref": "main",
+    "dir": "pdf",
+    "files": 12,
+    "bytes": 58692,
+    "installedAt": "2026-08-21T04:58:46.380Z"
+  }
+}

@@ -1,0 +1,63 @@
+plugins {
+    id 'com.android.application'
+    id 'org.jetbrains.kotlin.android'
+}
+
+android {
+    namespace = "com.hwj.agent"
+    compileSdk = 34
+
+    defaultConfig {
+        applicationId = "com.hwj.agent"
+        minSdk = 24
+        targetSdk = 34
+        versionCode = 13
+        versionName = "1.3.9"
+        ndk {
+            // 只带 arm64（真机主流）+ x86_64（模拟器调试），控制 APK 体积
+            abiFilters += ['arm64-v8a', 'x86_64']
+        }
+        externalNativeBuild {
+            cmake {
+                // libnode.so NEEDED libc++_shared.so——shared STL 才会把该库打进 APK
+                // （缺它 System.load 直接 dlopen failed，Node 永远起不来）
+                arguments "-DANDROID_STL=c++_shared"
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled = false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+
+    externalNativeBuild {
+        cmake {
+            path = file('src/main/cpp/CMakeLists.txt')
+            version = '3.22.1'
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+    kotlinOptions { jvmTarget = '17' }
+
+    // libnode.so 走 assets 运行期释放方案（规避 Android 15+ 16KB 页对齐阻断）；
+    // 排除 CMake 链接输入被 AGP 自动收进 lib/ 的重复副本
+    packaging {
+        jniLibs {
+            useLegacyPackaging = true
+            excludes += ['**/libnode.so']
+        }
+    }
+}
+
+dependencies {
+    implementation 'androidx.core:core-ktx:1.13.1'
+    implementation 'androidx.appcompat:appcompat:1.7.0'
+    implementation 'androidx.webkit:webkit:1.11.0'
+}

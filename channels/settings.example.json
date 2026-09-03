@@ -1,0 +1,30 @@
+{
+  "channels": {
+    "my-feishu": {
+      "type": "feishu",
+      "clientId": "$FEISHU_APP_ID",
+      "clientSecret": "$FEISHU_APP_SECRET",
+      "senderPolicy": "open",
+      "sessionScope": "user",
+      "cwd": "/workspace/dual-agent",
+      "groupPolicy": "disabled",
+      "dmPolicy": "open",
+      "instructions": "你是双 Agent 系统的执行助手。使用插件系统完成任务。",
+      "blockStreaming": "off",
+      "dispatchMode": "steer"
+    },
+    "my-dingtalk": {
+      "type": "dingtalk",
+      "clientId": "$DINGTALK_CLIENT_ID",
+      "clientSecret": "$DINGTALK_CLIENT_SECRET",
+      "senderPolicy": "open",
+      "sessionScope": "user",
+      "cwd": "/workspace/dual-agent",
+      "groupPolicy": "disabled",
+      "dmPolicy": "open",
+      "instructions": "你是双 Agent 系统的执行助手。",
+      "blockStreaming": "off",
+      "dispatchMode": "steer"
+    }
+  }
+}

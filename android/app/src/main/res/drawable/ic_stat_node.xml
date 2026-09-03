@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- 终端提示符风格的六边形节点图标 -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M12,2L21,7v10l-9,5l-9,-5V7z" />
+    <path
+        android:fillColor="#FF101418"
+        android:pathData="M10,8l4,4l-4,4l-1.2,-1.2L11.6,12L8.8,9.2z" />
+    <path
+        android:fillColor="#FF101418"
+        android:pathData="M14.5,15.5h2v1h-2z" />
+</vector>

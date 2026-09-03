@@ -1,0 +1,27 @@
+node_modules/
+.data/
+workspace/
+workspaces/
+dist/
+.pi/
+*.log
+__pycache__/
+*.pyc
+
+# Android 构建产物与工具链文件（android/ 目录只保留源码与配置）
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/app/src/main/assets/native/
+android/app/src/main/cpp/nodejs-mobile/
+android/site/*.apk
+android/app/src/main/assets/nodejs-project/
+android/app/.cxx/
+
+# 源码压缩包与开发期备份
+*.zip
+public/index-legacy.html
+
+# AI 协作内部数据
+.monkeycode/

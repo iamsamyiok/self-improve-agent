@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>wsl agent for Android</title>
+<style>
+  :root { color-scheme: dark; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: #101418; color: #E8EDF2; min-height: 100vh;
+    display: flex; flex-direction: column; align-items: center; padding: 48px 20px;
+  }
+  .wrap { max-width: 720px; width: 100%; }
+  h1 { font-size: 32px; letter-spacing: 1px; }
+  h1 .v { color: #7A8694; font-size: 18px; font-weight: normal; margin-left: 10px; }
+  .sub { color: #7A8694; margin: 10px 0 32px; font-size: 15px; line-height: 1.7; }
+  .card {
+    background: #171C22; border: 1px solid #232A33; border-radius: 12px;
+    padding: 22px 24px; margin-bottom: 18px;
+  }
+  .card h2 { font-size: 17px; margin-bottom: 14px; color: #C9D4DE; }
+  .row { display: flex; align-items: center; gap: 12px; padding: 9px 0; border-bottom: 1px solid #20262E; }
+  .row:last-child { border-bottom: none; }
+  .tag { flex-shrink: 0; width: 52px; text-align: center; font-size: 12px; border-radius: 6px; padding: 4px 0; font-weight: 600; }
+  .tag.done { background: #12351F; color: #4ADE80; }
+  .tag.doing { background: #3A2E10; color: #FBBF24; }
+  .tag.todo { background: #2A1215; color: #F87171; }
+  .row .name { flex-shrink: 0; width: 36px; color: #7A8694; font-weight: 700; }
+  .row .desc { color: #AAB6C2; font-size: 14px; line-height: 1.5; }
+  .dl {
+    display: block; text-align: center; margin-top: 26px; padding: 16px;
+    background: #2563EB; color: #fff; border-radius: 12px; text-decoration: none;
+    font-size: 17px; font-weight: 600;
+  }
+  .dl:hover { background: #1D4ED8; }
+  .meta { color: #7A8694; font-size: 13px; text-align: center; margin-top: 10px; line-height: 1.8; }
+  code { background: #20262E; border-radius: 4px; padding: 2px 7px; font-size: 13px; color: #93C5FD; }
+  ul { margin: 8px 0 0 18px; color: #AAB6C2; font-size: 14px; line-height: 1.9; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>wsl agent <span class="v">Android 版</span></h1>
+  <p class="sub">工作空间生命体的安卓形态：nodejs-mobile（Node 18.20.4）在 App 内运行完整服务端，
+  WebView 直连 127.0.0.1 纯聊天流界面。零 npm 依赖的架构原样迁移，所有状态存于 App 私有目录。</p>
+
+  <div class="card">
+    <h2>路线图进度</h2>
+    <div class="row"><span class="tag done">完成</span><span class="name">M1</span><span class="desc">Termux 发行版适配（NO_AUTOSTOP / 环境隔离 / 数据目录重定向）</span></div>
+    <div class="row"><span class="tag done">完成</span><span class="name">M2</span><span class="desc">正式 APK：nodejs-mobile 嵌入 + Kotlin 壳 + WebView + Foreground Service</span></div>
+    <div class="row"><span class="tag done">完成</span><span class="name">M3</span><span class="desc">bash 工具 toybox 适配层 · 前台服务任务进度通知 · 文件导出分享</span></div>
+    <div class="row"><span class="tag done">完成</span><span class="name">M4</span><span class="desc">v1.3.0 产品化：移动端聊天流 UI · WSL-SteadyKey 配置原子持久 · WSL-SelfForge 插件自锻造（链接造插件）· WSL-RestorePoint 还原点</span></div>
+  </div>
+
+  <div class="card">
+    <h2>技术要点</h2>
+    <ul>
+      <li><b>运行时</b>：nodejs-mobile v18.20.4（libnode.so 经 <code>node::Start</code> JNI 桥启动）</li>
+      <li><b>生命周期</b>：Foreground Service（dataSync）常驻通知，Doze 下任务不中断</li>
+      <li><b>安全</b>：服务仅绑 127.0.0.1；WebView 放行环回明文，外链强制浏览器；API Key 存私有目录</li>
+      <li><b>bash 适配</b>：toybox 能力探测 + 命令重写（grep -P→-E 等）+ not found 自纠提示</li>
+      <li><b>导出</b>：交付文件经 FileProvider 拉起系统分享</li>
+    </ul>
+  </div>
+
+  <a class="dl" id="dl" href="https://github.com/iamsamyiok/dual-agent/releases/download/v1.3.2/wsl-agent.apk" download>下载 wsl-agent.apk（44MB）</a>
+  <p class="meta" id="dlmeta">v1.3.2（多会话系统 · 文件上传修复 · 滚动导航 · 审批中心 + 一键还原）· arm64-v8a / x86_64 · Android 7.0+ · 侧载需允许未知来源 · 下载自 GitHub Release</p>
+</div>
+<script>
+  // APK 托管在 GitHub Release（81MB 超出本页托管上限），直链恒有效
+</script>
+</body>
+</html>
