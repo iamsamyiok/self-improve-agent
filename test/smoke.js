@@ -541,6 +541,68 @@ async function main() {
       process.env.DUAL_AGENT_SKILLS_SHARED = prev;
     }
   });
+  await t('skill promptSection：空库返回空串（系统提示恢复无技能形态）', async () => {
+    const prev = process.env.DUAL_AGENT_SKILLS_SHARED;
+    const cleanWs = path.join(TMP, 'ps-clean-ws');
+    fs.mkdirSync(cleanWs, { recursive: true });
+    process.env.DUAL_AGENT_SKILLS_SHARED = path.join(TMP, 'ps-empty-shared');
+    fs.mkdirSync(process.env.DUAL_AGENT_SKILLS_SHARED, { recursive: true });
+    try {
+      const sec = require('../plugins/skill').promptSection({ cwd: cleanWs, dataDir: DATA_TMP });
+      assert.strictEqual(sec, '', '双根均无技能时应返回空串');
+    } finally { process.env.DUAL_AGENT_SKILLS_SHARED = prev; }
+  });
+  await t('skill promptSection：清单行格式 + 计数 + 触发纪律', async () => {
+    const cleanWs = path.join(TMP, 'ps-clean-ws');
+    fs.mkdirSync(cleanWs, { recursive: true });
+    const shared = path.join(TMP, 'ps-shared');
+    fs.mkdirSync(shared, { recursive: true });
+    fs.mkdirSync(path.join(shared, 'demo-a'), { recursive: true });
+    fs.writeFileSync(path.join(shared, 'demo-a', 'SKILL.md'), '---\nname: demo-a\ndescription: Use when doing demo A tasks\n---\n\n正文', 'utf8');
+    const prev = process.env.DUAL_AGENT_SKILLS_SHARED;
+    process.env.DUAL_AGENT_SKILLS_SHARED = shared;
+    try {
+      const sec = require('../plugins/skill').promptSection({ cwd: cleanWs, dataDir: DATA_TMP });
+      assert.ok(sec.startsWith('## 可用技能库（共 1 个）：'), '应有计数头：' + sec.split('\n')[0]);
+      assert.ok(sec.includes('- demo-a: Use when doing demo A tasks'), '应有清单行');
+      assert.ok(sec.includes('skill.get("<技能名>")'), '应含触发纪律');
+      assert.ok(sec.includes('skill:'), '应含 skill: 协议提示');
+    } finally { process.env.DUAL_AGENT_SKILLS_SHARED = prev; }
+  });
+  await t('skill promptSection：预算截断（>40 技能取前 40 并注明剩余；总量 >6000 字符收缩）', async () => {
+    const shared = path.join(TMP, 'ps-many');
+    fs.mkdirSync(shared, { recursive: true });
+    for (let i = 0; i < 45; i++) {
+      const name = `bulk-${String(i).padStart(2, '0')}`;
+      fs.mkdirSync(path.join(shared, name), { recursive: true });
+      fs.writeFileSync(path.join(shared, name, 'SKILL.md'), `---\nname: ${name}\ndescription: bulk skill ${i} ${'描述内容'.repeat(8)}\n---\n\nx`, 'utf8');
+    }
+    const prev = process.env.DUAL_AGENT_SKILLS_SHARED;
+    process.env.DUAL_AGENT_SKILLS_SHARED = shared;
+    try {
+      const sec = require('../plugins/skill').promptSection(ctx);
+      assert.ok(sec.length <= 6000, `清单应受 6000 字符预算约束，实际 ${sec.length}`);
+      assert.ok(sec.includes('未列出'), '发生截断应注明剩余数量');
+      assert.ok(sec.includes('bulk-00'), '名称序前段应保留');
+    } finally { process.env.DUAL_AGENT_SKILLS_SHARED = prev; }
+  });
+  await t('系统提示：技能清单常驻 + Evolution 策略注入复活（P0 修复）', async () => {
+    const core = require('../hwj/core.js');
+    const prevPatch = process.env.DUAL_AGENT_SYSTEM_PATCH, prevStrategy = process.env.DUAL_AGENT_EVOLUTION_STRATEGY;
+    process.env.DUAL_AGENT_SYSTEM_PATCH = '静态断言策略补丁 XYZ';
+    process.env.DUAL_AGENT_EVOLUTION_STRATEGY = '{"memoryTopK":7}';
+    try {
+      const p = core.buildHwjSystemPrompt(ctx.cwd);
+      assert.strictEqual(typeof p, 'string', '必须返回字符串（历史 bug：return [ ] 返回数组导致 patch/strategy 死代码）');
+      assert.ok(p.includes('静态断言策略补丁 XYZ'), 'systemPatch 应注入');
+      assert.ok(p.includes('top_k=7'), 'strategy memoryTopK 应注入');
+    } finally {
+      process.env.DUAL_AGENT_SYSTEM_PATCH = prevPatch;
+      process.env.DUAL_AGENT_EVOLUTION_STRATEGY = prevStrategy;
+    }
+    const src = fs.readFileSync(path.join(__dirname, '..', 'hwj', 'core.js'), 'utf8');
+    assert.ok(src.includes('const lines = ['), '静态防回归：buildHwjSystemPrompt 禁止提前 return 数组');
+  });
   await t('skill 插件：list 描述按词边界截断（不截在词中间）', async () => {
     const skDir = path.join(WS, 'skills', 'clip-test');
     fs.mkdirSync(skDir, { recursive: true });
@@ -1312,7 +1374,7 @@ async function main() {
   });
   await t('静态防回归：日期注入 / 子级只读硬拦截 / 里程碑记忆接线（P1-4/P1-5/P1-6）', () => {
     const srv = fs.readFileSync(path.join(ROOT, 'server.js'), 'utf8');
-    assert.ok(/\{TODAY\}/.test(srv) && /buildInnerSystemPrompt\(\)/.test(srv), '系统提示含 {TODAY} 且会话首条每次重建');
+    assert.ok(/\{TODAY\}/.test(srv) && /buildInnerSystemPrompt\(/.test(srv), '系统提示含 {TODAY} 且会话首条每次重建');
     assert.ok(/name === 'write' \|\| name === 'edit'/.test(srv), '子级未声明 writable 时 write/edit 执行层硬拦截');
     assert.ok(/只写子任务指定的目标路径/.test(srv), '可写版子级系统提示存在');
     assert.ok(/milestoneWatch/.test(srv) && /里程碑完成/.test(srv), 'todo.toggle 完成项自动写里程碑记忆');

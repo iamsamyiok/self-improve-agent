@@ -135,10 +135,14 @@ function humanizeAnswer(text) {
   return '我在的。有什么任务需要帮忙，直接说就可以——比如创建文件、整理资料、做计算或写文档。';
 }
 
-function buildHwjSystemPrompt() {
+function buildHwjSystemPrompt(cwd) {
   const now = new Date();
   const dateStr = `${now.getFullYear()} 年 ${now.getMonth() + 1} 月 ${now.getDate()} 日（星期${'日一二三四五六'[now.getDay()]}）`;
-  return [
+  // P0 修复（2026-09-03）：此前此处误写为 return [ ... ]，直接返回原始数组——
+  // 下方 systemPatch/strategy 注入全部成为死代码，strategy 类 A/B 实验的 candidate 从未收到策略注入，
+  // 历史"strategy 突变 delta≈0"的结论实际是"注入失效"，需要重新审视。
+  const skillPromptSection = (() => { try { return require('../plugins/skill').promptSection({ cwd: cwd || process.cwd() }); } catch { return ''; } })();
+  const lines = [
     '你是 hwj 终端智能体（dual-agent 内层执行 Agent），通过调用插件完成任务，完成后用简洁中文总结（面向终端阅读，直接输出结果）。当前日期：' + dateStr + '（涉及"最新/近期"的搜索与判断以此为准）。',
     '',
     '## 身份与对话纪律：',
@@ -148,7 +152,7 @@ function buildHwjSystemPrompt() {
     '',
     '## 任务执行前必须：',
     '1. 先调用 memory.search(query="任务关键词") 检索相关记忆——记忆仅当与本任务直接相关才使用，禁止被旧任务记忆带偏目标',
-    '2. 调用 skill.list() 查看技能库，发现相关技能必须 skill.get(name) 读全文并按其步骤执行',
+    ...(skillPromptSection ? [skillPromptSection, ''] : []),
     '3. 复杂任务（≥3 步骤/多文件/含"然后/接着/再/最后"）必须先 todo.add 建清单，每完成一步 todo.toggle 勾选，全部完成时清单应全为 [x]',
     '4. 产出验证纪律：收尾前用 verify 插件断言关键产出（exists + contains + line_count），FAIL 必须修复后重验，PASS 才能总结',
     '5. 探索型子任务（多文件调研/方案对比/≥2 个独立查证）用 subagent 并行派生，主上下文只收结论',
@@ -209,9 +213,9 @@ async function runTask(input, ctx) {
   const messages = loadSession(ctx.ws);
   if (messages.corrupted) { ui.printInfo('会话文件损坏，已备份为 .bak 并重开新会话'); }
   const msgs = messages.corrupted ? [] : messages;
-  // 系统提示首位重建（日期每日刷新）
-  if (msgs[0] && msgs[0].role === 'system') msgs[0].content = buildHwjSystemPrompt();
-  else msgs.unshift({ role: 'system', content: buildHwjSystemPrompt() });
+  // 系统提示首位重建（日期每日刷新；cwd=工作区目录，用于技能根定位）
+  if (msgs[0] && msgs[0].role === 'system') msgs[0].content = buildHwjSystemPrompt(ctx.ws);
+  else msgs.unshift({ role: 'system', content: buildHwjSystemPrompt(ctx.ws) });
 
   appendProcess(ctx.ws, `\n---\n\n## ${fmtClock(Date.now())} 📋 任务（hwj）\n\n${input}\n`);
 
@@ -467,6 +471,7 @@ async function runTask(input, ctx) {
     }
     // 交付核验 + 自动返修（对齐 server 748-807：硬断言先行，judge 补语义，上限 2 轮）
     const MAX_REPAIR = 2;
+    let repairCount = 0, finalGaps = [];
     if (hasActiveIntent()) {
       const intent = getCurrentIntent();
       const collectGaps = async () => {
@@ -501,10 +506,12 @@ async function runTask(input, ctx) {
         appendProcess(ctx.ws, `\n### ${fmtClock(Date.now())} ✅ 交付核验（第 ${r + 1} 次，hwj）\n\n${gaps.length ? gaps.map((g, i) => `${i + 1}. ${g}`).join('\n') : 'PASS：意图契约全部条款满足'}\n`);
         if (!gaps.length) { ui.printInfo('[交付核验] PASS：交付满足意图契约全部条款'); break; }
         if (r >= MAX_REPAIR) {
+          finalGaps = gaps;
           ui.printInfo(`[交付核验] 返修上限（${MAX_REPAIR} 轮）已到，仍有 ${gaps.length} 项缺口，带缺口标注交付`);
           lastAnswer = `${lastAnswer}\n\n[交付核验缺口标注] 以下要求经 ${MAX_REPAIR + 1} 次核验仍未满足：\n${gaps.map((g, i) => `${i + 1}. ${g}`).join('\n')}`;
           break;
         }
+        repairCount++;
         const repairMsg = `[交付核验] 对照意图契约发现以下未满足项：\n${gaps.map((g, i) => `${i + 1}. ${g}`).join('\n')}\n请立即针对性修复上述缺口（已满足的项不要重做），完成后重新交付总结。`;
         msgs.push({ role: 'user', content: repairMsg });
         persistSession(ctx.ws, msgs);
@@ -514,8 +521,10 @@ async function runTask(input, ctx) {
     }
     // 自动归档（v0.9.31，对齐 Hermes 会话归档静默写入；与 server 逐字对齐）：
     // 任务结束即把 用户消息+最终交付 归档到 memory-archive.jsonl，供后续任务 archive_search 检索；异步不阻塞交付
-    if (String(lastAnswer || '').trim() && !String(lastAnswer).includes('[交付核验缺口标注]')) {
-      plugins.runPlugin('memory', { action: 'archive_save', user: String(input || ''), finalText: String(lastAnswer || '').slice(0, 4000) }, { cwd: WS, dataDir: DATA_DIR }).catch(() => {});
+    if (String(lastAnswer || '').trim()) {
+      if (!String(lastAnswer).includes('[交付核验缺口标注]')) {
+        plugins.runPlugin('memory', { action: 'archive_save', user: String(input || ''), finalText: String(lastAnswer || '').slice(0, 4000) }, { cwd: WS, dataDir: DATA_DIR }).catch(() => {});
+      }
       // 成功任务自动进入 Evolution Benchmark Ledger；这里只记录任务与可观测产出，
       // 真正的评分必须在未来 replay 时重新执行，避免“自评即真值”。
       // Evolution Worker（A/B 重放）模式跳过：重放产生的是实验数据，写入的也是实验副本 data 目录。
@@ -523,7 +532,14 @@ async function runTask(input, ctx) {
         if (process.env.DUAL_AGENT_EVOLUTION_WORKER !== '1') {
           const evolution = require('../lib/evolution');
           const intent = getCurrentIntent();
-          evolution.recordBenchmark({ task: input, finalText: lastAnswer, ws: ctx.ws, intent, artifacts: evolution.artifactManifest(WS) });
+          if (!String(lastAnswer).includes('[交付核验缺口标注]')) {
+            // 返修后最终 PASS 的任务是最有价值的难例：repairs>0 会被标记 hard，进化时优先重放
+            evolution.recordBenchmark({ task: input, finalText: lastAnswer, ws: ctx.ws, intent, artifacts: evolution.artifactManifest(WS), repairs: repairCount, lastGaps: [] });
+          } else {
+            // 上限仍未过的任务可能本身不可完成，不入 benchmark（避免不可达任务压扁 A/B），
+            // 但缺口原文进经验池，供 Meta-Agent 提炼 skill mutation 时参考
+            evolution.recordGap({ ts: new Date().toISOString(), task: String(input || '').slice(0, 2000), acceptance: Array.isArray(intent && intent.acceptance) ? intent.acceptance.slice(0, 8) : [], gaps: finalGaps.map(g => String(g).slice(0, 300)).slice(0, 8), repairs: repairCount });
+          }
           // 真正的自进化：任务完成只是产生经验，不立即修改生产；异步启动 Evolution Engine，
           // Engine 自己负责 candidate sandbox、A/B、统计门槛、regression 与 promote。
           if (evolution.shouldAutoEvolve()) {

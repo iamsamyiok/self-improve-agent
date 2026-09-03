@@ -404,17 +404,23 @@ async function opencodeRunner() {
 // 内层系统提示：针对真实模型实测暴露的三类问题（并行调用丢参数、超长参数传输截断、oldText 凭记忆编写）
 // 日期注入（v0.9.12 P1-5）：模型无实时感知，搜索"最新"数据时只能瞎猜年份——
 // 上次调研任务搜 2024/2025 过时数据即此病根。每次构造提示时注入当天日期与星期
-function buildInnerSystemPrompt() {
+function buildInnerSystemPrompt(cwd) {
   const now = new Date();
   const dateStr = `${now.getFullYear()} 年 ${now.getMonth() + 1} 月 ${now.getDate()} 日（星期${'日一二三四五六'[now.getDay()]}）`;
-  return INNER_SYSTEM_PROMPT_BASE.replace('{TODAY}', dateStr).replace('{FORGE_DIR}', plugins.FORGE_DIR);
+  // 技能清单（渐进披露第 1 层）：与 TUI 共用 skill.promptSection，每次任务实时扫描，晋级技能即时可见
+  let skillSection = '';
+  try { skillSection = require('./plugins/skill').promptSection({ cwd: cwd || WS_DIR }); } catch { /* 扫描失败按无技能处理 */ }
+  return INNER_SYSTEM_PROMPT_BASE
+    .replace('{SKILLS}', skillSection)
+    .replace('{TODAY}', dateStr)
+    .replace('{FORGE_DIR}', plugins.FORGE_DIR);
 }
 const INNER_SYSTEM_PROMPT_BASE = [
   '你是内层执行 Agent，通过调用插件完成任务，完成后用简洁中文总结。当前日期：{TODAY}（涉及"最新/近期"的搜索与判断以此为准）。',
   '',
   '## 任务执行前必须：',
   '1. 先调用 memory.search(query="任务关键词") 检索相关记忆，将结果作为背景参考——注意：记忆是历史任务的沉淀，仅当内容与本任务直接相关才使用；与本任务话题无关的记忆必须忽略，禁止被旧任务记忆带偏当前任务的目标',
-  '2. 调用 skill.list() 查看技能库（渐进式：list 只给名称+描述），发现与任务相关的技能必须 skill.get(name) 读全文并按其步骤执行',
+  '{SKILLS}',
   '3. 复杂任务必须先建任务清单：满足任一条件即算复杂——(a) 需要 ≥3 个执行步骤 (b) 涉及多个文件的创建/修改 (c) 用户消息含"然后/接着/再/最后"等多步标志。建法：每个步骤一次 todo.add(text="动宾短语")；此后每完成一步立即 todo.toggle(id=...) 勾选，开始下一步前如记不清进度就 todo.list() 查看；全部完成时清单应全为 [x]。禁止跳过建清单直接执行复杂任务',
   '4. 产出验证纪律：任务产出文件后，禁止只凭"我写了"就宣称完成。收尾前用 verify 插件断言关键产出（exists + contains 文本特征 + line_count 行数），多规则一次调用；看到 FAIL 必须修复后重新 verify，直到 PASS 才能总结',
   '5. 子智能体（subagent）：探索型子任务（多文件调研、方案对比、联网查证 ≥2 个独立问题）用 subagent 插件并行派生，主上下文只收结论——禁止自己 read 一堆大文件把上下文撑爆。产出写入类操作仍由主会话亲自执行',
@@ -619,8 +625,8 @@ async function handleInnerChat(req, res, preBody, fromQueue) {
  };
  // 确保系统提示在会话首位（历史会话无 system 时补插；reset 后重建）
  // 确保系统提示在会话首位（历史会话无 system 时补插；reset 后重建）；每次重建注入当天日期
- if (innerMessages[0] && innerMessages[0].role === 'system') innerMessages[0].content = buildInnerSystemPrompt();
- else innerMessages.unshift({ role: 'system', content: buildInnerSystemPrompt() });
+ if (innerMessages[0] && innerMessages[0].role === 'system') innerMessages[0].content = buildInnerSystemPrompt(currentWorkspace());
+ else innerMessages.unshift({ role: 'system', content: buildInnerSystemPrompt(currentWorkspace()) });
       // 多步任务检测 → 注入 todo 提醒到 user 消息尾部（实测 agnes-2.5-flash 无视 system 程序指令，
       // 但对紧邻任务文本遵循度高；注入落盘，历史中形成使用示范）
       let finalMsg = message;
@@ -909,6 +915,7 @@ async function handleInnerChat(req, res, preBody, fromQueue) {
    }
     // 交付核验 + 自动返修（v0.9.24 解耦为插件）：对照意图契约核验（硬断言先行，语义缺口 judge 补），
     // 发现缺口注入返修指令重入执行，上限 2 轮（防完美主义死循环）
+    let repairCount = 0, finalGaps = [];
     if (hasActiveIntent()) {
       const intent = getCurrentIntent();
       const collectGaps = async () => {
@@ -951,19 +958,21 @@ async function handleInnerChat(req, res, preBody, fromQueue) {
         }
         return gaps;
       };
-     const MAX_REPAIR = 2;
-     for (let r = 0; ; r++) {
-       const gaps = await collectGaps();
-       appendProcess(`\n### ${fmtClock(Date.now())} ✅ 交付核验（第 ${r + 1} 次）\n\n${gaps.length ? gaps.map((g, i) => `${i + 1}. ${g}`).join('\n') : 'PASS：意图契约全部条款满足'}\n`);
-       if (!gaps.length) {
-         send({ type: 'info', text: '[交付核验] PASS：交付满足意图契约全部条款' });
-         break;
-       }
-       if (r >= MAX_REPAIR) {
-         send({ type: 'info', text: `[交付核验] 返修上限（${MAX_REPAIR} 轮）已到，仍有 ${gaps.length} 项缺口，带缺口标注交付` });
-         lastAnswer = `${lastAnswer}\n\n[交付核验缺口标注] 以下要求经 ${MAX_REPAIR + 1} 次核验仍未满足：\n${gaps.map((g, i) => `${i + 1}. ${g}`).join('\n')}`;
-         break;
-       }
+      const MAX_REPAIR = 2;
+      for (let r = 0; ; r++) {
+        const gaps = await collectGaps();
+        appendProcess(`\n### ${fmtClock(Date.now())} ✅ 交付核验（第 ${r + 1} 次）\n\n${gaps.length ? gaps.map((g, i) => `${i + 1}. ${g}`).join('\n') : 'PASS：意图契约全部条款满足'}\n`);
+        if (!gaps.length) {
+          send({ type: 'info', text: '[交付核验] PASS：交付满足意图契约全部条款' });
+          break;
+        }
+        if (r >= MAX_REPAIR) {
+          finalGaps = gaps;
+          send({ type: 'info', text: `[交付核验] 返修上限（${MAX_REPAIR} 轮）已到，仍有 ${gaps.length} 项缺口，带缺口标注交付` });
+          lastAnswer = `${lastAnswer}\n\n[交付核验缺口标注] 以下要求经 ${MAX_REPAIR + 1} 次核验仍未满足：\n${gaps.map((g, i) => `${i + 1}. ${g}`).join('\n')}`;
+          break;
+        }
+        repairCount++;
        const repairMsg = `[交付核验] 对照意图契约发现以下未满足项：\n${gaps.map((g, i) => `${i + 1}. ${g}`).join('\n')}\n请立即针对性修复上述缺口（已满足的项不要重做），完成后重新交付总结。`;
        innerMessages.push({ role: 'user', content: repairMsg });
        persistInnerMessages();
@@ -974,26 +983,33 @@ async function handleInnerChat(req, res, preBody, fromQueue) {
     // 自动归档（v0.9.31，对齐 Hermes 会话归档静默写入；与 hwj/core.js 逐字对齐）：
     // 任务结束即把 用户消息+最终交付 归档到 memory-archive.jsonl，供后续任务 archive_search 检索；异步不阻塞交付
     if (String(lastAnswer || '').trim()) {
-      plugins.runPlugin('memory', { action: 'archive_save', user: String(message || ''), finalText: String(lastAnswer || '').slice(0, 4000) }, { cwd: WS_DIR, dataDir: DATA_DIR }).catch(() => {});
+      if (!String(lastAnswer).includes('[交付核验缺口标注]')) {
+        plugins.runPlugin('memory', { action: 'archive_save', user: String(message || ''), finalText: String(lastAnswer || '').slice(0, 4000) }, { cwd: WS_DIR, dataDir: DATA_DIR }).catch(() => {});
+      }
       // 成功任务自动进入 Evolution Benchmark Ledger（与 TUI 同一套账本）；
-      // 带缺口标注的交付（核验未全过）不入库，防止污染 benchmark 集合。
+      // 返修后 PASS 的标记 hard 难例；上限仍未过的只进缺口经验池。
       // 这里只记录任务与可观测产出，真正的评分必须在未来 replay 时重新执行。
       const hasUnresolvedGaps = String(lastAnswer).includes('[交付核验缺口标注]');
-      if (!hasUnresolvedGaps) {
-        try {
-          const evolution = require('./lib/evolution');
-          const intent = getCurrentIntent();
-          evolution.recordBenchmark({ task: message, finalText: lastAnswer, ws: currentWorkspace(), intent, artifacts: evolution.artifactManifest(WS_DIR) });
-          // 真正的自进化：任务完成只产生经验，异步启动 Evolution Engine（后台 A/B 实验），
-          // Engine 自己负责 candidate sandbox、统计门槛、regression 与 promote。
-          if (evolution.shouldAutoEvolve() && process.env.DUAL_AGENT_EVOLUTION_WORKER !== '1') {
-            process.env.DUAL_AGENT_EVOLUTION_RUNNING = '1';
-            setImmediate(() => require('./lib/evolution').runEvolution({ promote: process.env.DUAL_AGENT_AUTO_PROMOTE !== '0' })
-              .catch((e) => console.error('[evolution] 自动进化失败:', (e && e.message) || e))
-              .finally(() => { delete process.env.DUAL_AGENT_EVOLUTION_RUNNING; }));
-          }
-        } catch { /* evolution 记录失败不影响任务交付 */ }
-      }
+      try {
+        const evolution = require('./lib/evolution');
+        const intent = getCurrentIntent();
+        if (!hasUnresolvedGaps) {
+          // 返修后最终 PASS 的任务是最有价值的难例：repairs>0 会被标记 hard，进化时优先重放
+          evolution.recordBenchmark({ task: message, finalText: lastAnswer, ws: currentWorkspace(), intent, artifacts: evolution.artifactManifest(WS_DIR), repairs: repairCount, lastGaps: [] });
+        } else {
+          // 上限仍未过的任务可能本身不可完成，不入 benchmark（避免不可达任务压扁 A/B），
+          // 但缺口原文进经验池，供 Meta-Agent 提炼 skill mutation 时参考
+          evolution.recordGap({ ts: new Date().toISOString(), task: String(message).slice(0, 2000), acceptance: Array.isArray(intent && intent.acceptance) ? intent.acceptance.slice(0, 8) : [], gaps: finalGaps.map(g => String(g).slice(0, 300)).slice(0, 8), repairs: repairCount });
+        }
+        // 真正的自进化：任务完成只产生经验，异步启动 Evolution Engine（后台 A/B 实验），
+        // Engine 自己负责 candidate sandbox、统计门槛、regression 与 promote。
+        if (evolution.shouldAutoEvolve() && process.env.DUAL_AGENT_EVOLUTION_WORKER !== '1') {
+          process.env.DUAL_AGENT_EVOLUTION_RUNNING = '1';
+          setImmediate(() => require('./lib/evolution').runEvolution({ promote: process.env.DUAL_AGENT_AUTO_PROMOTE !== '0' })
+            .catch((e) => console.error('[evolution] 自动进化失败:', (e && e.message) || e))
+            .finally(() => { delete process.env.DUAL_AGENT_EVOLUTION_RUNNING; }));
+        }
+      } catch { /* evolution 记录失败不影响任务交付 */ }
     }
     flushText();
     persistInnerMessages();

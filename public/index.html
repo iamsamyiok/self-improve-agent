@@ -107,7 +107,7 @@
   .composer-wrap { padding:8px 20px calc(14px + env(safe-area-inset-bottom, 0px)); flex-shrink:0; background:linear-gradient(transparent, var(--bg) 30%); }
   .composer { max-width:768px; margin:0 auto; display:flex; align-items:flex-end; gap:8px; border:1px solid var(--border-2); border-radius:26px; padding:9px 9px 9px 16px; background:#fff; box-shadow:0 2px 12px rgba(0,0,0,.04); transition:box-shadow .2s, border-color .2s; }
   .composer:focus-within { border-color:#c4c4cc; box-shadow:0 4px 18px rgba(0,0,0,.08); }
-  .composer textarea { flex:1; border:none; outline:none; resize:none; font:inherit; font-size:15px; line-height:1.6; max-height:180px; background:transparent; color:var(--text); padding:6px 0; }
+  .composer textarea { flex:1; border:none; outline:none; resize:none; font:inherit; font-size:15px; line-height:1.6; max-height:180px; min-height:60px; /* 两行高度：1.6 行距 × 15px × 2 行 + 上下 padding 12px */ background:transparent; color:var(--text); padding:6px 0; }
   .composer textarea::placeholder { color:var(--text-3); }
   .composer textarea:disabled { color:var(--text-3); }
   .c-btn { width:36px; height:36px; border-radius:50%; border:none; background:var(--green); color:#fff; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:background .15s, transform .1s; flex-shrink:0; }
@@ -181,7 +181,7 @@
     .msg-user { max-width:86%; }
     .composer-wrap { padding-left:12px; padding-right:12px; }
     .composer { border-radius:22px; padding:7px 7px 7px 13px; }
-    .composer textarea { font-size:16px; } /* 防 iOS 聚焦自动缩放 */
+    .composer textarea { font-size:16px; min-height:64px; } /* 防 iOS 聚焦自动缩放；16px 行高下两行 64px */
     .c-btn { width:40px; height:40px; }
     .composer-hint { display:none; }
     .sug-grid { grid-template-columns:1fr; gap:9px; }
@@ -275,7 +275,7 @@
         <button class="c-btn ghost" id="uploadBtn" title="上传文档（doc 插件可读取）" onclick="$('fileInput').click()">
           <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
         </button>
-        <textarea id="input" rows="1" placeholder="给 Agent 一个任务，每个完成的任务都会成为进化证据…" oninput="autoGrow(this)"></textarea>
+        <textarea id="input" rows="2" placeholder="给 Agent 一个任务，每个完成的任务都会成为进化证据…" oninput="autoGrow(this)"></textarea>
         <button class="c-btn" id="sendBtn" onclick="send()" title="发送">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
         </button>

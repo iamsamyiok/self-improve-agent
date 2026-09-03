@@ -133,6 +133,29 @@ function listAll(ctx) {
   return [...merged.values()].sort((a, b) => a.name.localeCompare(b.name));
 }
 
+// 渐进披露第 1 层（Agent Skills 标准）：把"名称+描述"清单注入系统提示，Agent 启动即感知。
+// 返回拼好的提示文本段（纯 JS，零 LLM 工具调用轮次）；技能库为空返回空串（省略该段）。
+// 截断三规则：单条 desc ≤120 字符；技能数 >40 取前 40；清单总字符 >6000 从尾部丢弃（保底 10 个）。
+const PROMPT_MAX_SKILLS = 40;
+const PROMPT_MAX_CHARS = 6000;
+const PROMPT_MIN_SKILLS = 10;
+function promptSection(ctx) {
+  let all = listAll(ctx);
+  if (!all.length) return '';
+  all = all.map(s => ({ name: s.name, desc: String(s.desc || '').slice(0, 120) + (String(s.desc || '').length > 120 ? '…' : '') }));
+  let hidden = 0;
+  if (all.length > PROMPT_MAX_SKILLS) { hidden = all.length - PROMPT_MAX_SKILLS; all = all.slice(0, PROMPT_MAX_SKILLS); }
+  const header = `## 可用技能库（共 ${all.length + hidden} 个）：`;
+  let rows = all.map(s => `- ${s.name}: ${s.desc}`);
+  const tail = '技能触发纪律：上述清单中 description 与当前任务场景匹配的技能，必须先 skill.get("<技能名>") 读全文，并严格按其步骤执行后再开始相关操作。全文引用的捆绑文件用 read 插件 path="skill:<技能名>/<相对路径>" 读取。任务中途需要再次查找时用 skill.list()。';
+  const section = () => [header, ...rows, '', tail + (hidden ? `（另有 ${hidden} 个技能未列出，可用 skill.list() 查看）` : '')].join('\n');
+  while (section().length > PROMPT_MAX_CHARS && rows.length > PROMPT_MIN_SKILLS) {
+    hidden += 1;
+    rows = rows.slice(0, -1);
+  }
+  return section();
+}
+
 function findBySlug(ctx, name) {
   const slug = toSlug(name);
   return listAll(ctx).find(s => s.name === name || s.name === slug);
@@ -374,3 +397,4 @@ module.exports = {
     throw new Error(`未知操作：${action}（支持 list/get/save/delete）`);
   }
 };
+module.exports.promptSection = promptSection;

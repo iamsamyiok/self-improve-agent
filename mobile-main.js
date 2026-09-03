@@ -10,6 +10,18 @@ for (const d of [dataDir, path.join(dataDir, 'data'), path.join(dataDir, 'worksp
   fs.mkdirSync(d, { recursive: true });
 }
 
+// LLM 内置：APK 打包时把 llm-config.json 放进 assets，Node 侧释放后由 Kotlin copyAssetsTree
+// 一并带到 nodejs-project/。首启动预置到 dataDir/data/config.json；用户之后在设置页改配置
+// 写回同一位置，覆盖式预置只在"从未配置过"时发生，不吞用户改动。
+try {
+  const cfgTarget = path.join(dataDir, 'data', 'config.json');
+  const cfgBundled = path.join(__dirname, 'llm-config.json');
+  if (!fs.existsSync(cfgTarget) && fs.existsSync(cfgBundled)) {
+    fs.copyFileSync(cfgBundled, cfgTarget);
+    console.log('[mobile-main] LLM 配置已从内置预置到', cfgTarget);
+  }
+} catch (e) { console.log('[mobile-main] LLM 配置预置失败（忽略，可在设置页手动配置）:', e.message); }
+
 process.env.DUAL_AGENT_DATA = path.join(dataDir, 'data');
 process.env.DUAL_AGENT_WS_ROOT = path.join(dataDir, 'workspaces');
 process.env.DUAL_AGENT_AUTOSTOP = '0';            // App 内生命周期由前台服务管理，禁用空闲自动退出

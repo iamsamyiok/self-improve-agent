@@ -27,6 +27,16 @@ rsync -a --delete \
 # 打包排除项：workspaces/.data 属运行期数据；test/docs 不进 App
 rm -rf "$ASSETS/workspaces" "$ASSETS/.data"
 
+# LLM 内置：.data/config.json（gitignore，本机私有）打包为 assets/llm-config.json，
+# 由 mobile-main.js 首启动预置到 App 私有 data 目录。无配置时放占位模板（设置页可填）。
+if [ -f "$ROOT/.data/config.json" ]; then
+  cp "$ROOT/.data/config.json" "$ASSETS/llm-config.json"
+  echo "[copy-assets] LLM 配置已内置（来源 .data/config.json）"
+else
+  printf '{\n  "inner": { "base_url": "", "api_key": "", "model": "" }\n}\n' > "$ASSETS/llm-config.json"
+  echo "[copy-assets] 未发现 .data/config.json，已内置占位配置"
+fi
+
 echo "[copy-assets] libnode.so -> assets/native（运行期释放）+ cpp/nodejs-mobile（链接）"
 for ABI in arm64-v8a x86_64; do
   mkdir -p "$NATIVE/$ABI" "$CPPN/$ABI"
