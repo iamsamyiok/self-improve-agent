@@ -1606,6 +1606,16 @@ const server = http.createServer(async (req, res) => {
       json(res, 200, require('./lib/scout').scoutStatus());
       return;
     }
+    if (p === '/api/reinforce/status' && req.method === 'GET') {
+      json(res, 200, require('./lib/reinforce').reinforceStatus());
+      return;
+    }
+    if (p === '/api/reinforce/run' && req.method === 'POST') {
+      if (innerLock || outerLock) { json(res, 409, { success:false, error:'任务执行中，强化补练已顺延' }); return; }
+      if (process.env.DUAL_AGENT_EVOLUTION_RUNNING === '1' || process.env.DUAL_AGENT_EVOLUTION_WORKER) { json(res, 409, { success:false, error:'进化实验进行中，强化补练已顺延' }); return; }
+      runReinforceSafe().then(r => json(res, 200, r)).catch(e => json(res, 500, { success:false, error:String((e && e.message) || e) }));
+      return;
+    }
     if (p === '/api/scout/run' && req.method === 'POST') {
       if (innerLock || outerLock) { json(res, 409, { success:false, error:'任务执行中，外部学习已顺延（避免争抢资源）' }); return; }
       if (process.env.DUAL_AGENT_EVOLUTION_RUNNING === '1' || process.env.DUAL_AGENT_EVOLUTION_WORKER) { json(res, 409, { success:false, error:'进化实验进行中，外部学习已顺延' }); return; }
@@ -1853,20 +1863,36 @@ server.listen(PORT, '127.0.0.1', () => {
     evoClean.cleanupStale();
     setInterval(() => { try { evoClean.cleanupStale(); } catch (e) { console.error('[cleanup]', (e && e.message) || e); } }, 24 * 60 * 60 * 1000).unref();
   } catch (e) { console.error('[cleanup] 初始化失败（不影响服务）', (e && e.message) || e); }
-  // 外部学习调度：每 30 分钟检查一次——每日目标未达标且距上次成功 ≥24h 且空闲（无任务、无进化实验）才执行
+  // 空闲自动处理调度：每 30 分钟检查——空闲（无任务、无进化实验）时，
+  // 强化补练（自己的错题）优先于外部学习（别人的经验），两者都有每日预算
   try {
     const scout = require('./lib/scout');
     setInterval(() => {
       try {
-        if (!scout.scoutDue()) return;
-        if (innerLock || outerLock) return; // 任务进行中：学习永远给真实任务让路
+        if (innerLock || outerLock) return; // 任务进行中：自动处理永远给真实任务让路
         if (process.env.DUAL_AGENT_EVOLUTION_RUNNING === '1' || process.env.DUAL_AGENT_EVOLUTION_WORKER) return;
-        runScoutSafe();
-      } catch (e) { console.error('[scout]', (e && e.message) || e); }
+        if (require('./lib/reinforce').reinforceDue()) { runReinforceSafe().catch(() => {}); return; }
+        if (scout.scoutDue()) { runScoutSafe().catch(() => {}); return; }
+      } catch (e) { console.error('[idle]', (e && e.message) || e); }
     }, 30 * 60 * 1000).unref();
-  } catch (e) { console.error('[scout] 初始化失败（不影响服务）', (e && e.message) || e); }
+  } catch (e) { console.error('[idle] 初始化失败（不影响服务）', (e && e.message) || e); }
   openBrowser(url0);
 });
+
+// 强化补练执行壳：串行防重入 + 容错
+let reinforceRunning = false;
+async function runReinforceSafe() {
+  if (reinforceRunning) return { success: false, error: '强化补练已在进行中' };
+  reinforceRunning = true;
+  try {
+    const r = await require('./lib/reinforce').processQueue();
+    if (r.processed > 0) console.log(`[reinforce] 补练完成：${r.processed} 个任务，通过 ${r.passed}，沉淀 ${r.promoted}，升级 ${r.escalated}，剩余队列 ${r.remaining}`);
+    return r;
+  } catch (e) {
+    console.error('[reinforce] 补练失败（不影响服务）', (e && e.message) || e);
+    return { success: false, error: String((e && e.message) || e) };
+  } finally { reinforceRunning = false; }
+}
 
 // 外部学习执行壳：串行防重入 + 容错（学习失败不影响服务）
 let scoutRunning = false;

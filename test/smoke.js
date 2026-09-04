@@ -2328,10 +2328,18 @@ async function main() {
     assert.ok(html.includes('renderScout'), '外部学习区块渲染接线存在');
     assert.ok(html.includes('/api/scout/status'), '外部学习状态接口调用存在');
     assert.ok(html.includes('立即学习'), '外部学习手动触发按钮存在');
+    assert.ok(html.includes('renderReinforce'), '强化处理区块渲染接线存在');
+    assert.ok(html.includes('/api/reinforce/status'), '强化处理状态接口调用存在');
+    assert.ok(html.includes('立即补练'), '强化补练手动触发按钮存在');
     const srv = fs.readFileSync(path.join(ROOT, 'server.js'), 'utf8');
     assert.ok(srv.includes("'/api/evolution/assets'"), '资产明细路由存在');
     assert.ok(srv.includes("'/api/evolution/detail'"), '明细路由存在');
     assert.ok(srv.includes("'/api/scout/status'"), '外部学习状态路由存在');
+    assert.ok(srv.includes("'/api/reinforce/status'"), '强化处理状态路由存在');
+    assert.ok(srv.includes("'/api/reinforce/run'"), '强化补练触发路由存在');
+    assert.ok(srv.includes('reinforceDue()'), '补练空闲调度判定接线存在');
+    assert.ok(srv.indexOf('reinforceDue()') < srv.indexOf('scoutDue()') , '补练调度应优先于外部学习');
+    assert.ok(srv.includes('runReinforceSafe'), '补练执行壳（串行防重入）存在');
     assert.ok(srv.includes("'/api/scout/run'"), '外部学习手动触发路由存在');
     assert.ok(srv.includes('scout.scoutDue()'), '空闲调度判定接线存在');
     assert.ok(srv.includes('runScoutSafe'), '学习执行壳（串行防重入）存在');

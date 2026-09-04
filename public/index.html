@@ -834,6 +834,39 @@
     }).catch(() => { panel.innerHTML = '<div class="ad-loading">加载失败</div>'; });
   }
 
+  // 强化处理区块：补练队列 + 今日预算 + 成功率 + 最近补练记录 + 手动触发
+  async function renderReinforce(afterEl) {
+    let el = $('edReinforce');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'edReinforce'; el.className = 'ed-sec';
+      afterEl.after(el);
+    }
+    el.innerHTML = '<div style="font-size:12px;color:var(--text-3);padding:6px 2px 0">强化处理：加载中…</div>';
+    try {
+      const s = await api('/api/reinforce/status');
+      if (!s.success) { el.innerHTML = ''; return; }
+      const causeLabel = { tool_misuse: '工具误用', knowledge_gap: '知识缺失', planning_flaw: '规划缺陷', acceptance_misread: '验收误解', external_dependency: '外部依赖' };
+      const recent = (s.recent || []).slice(0, 3).map(r =>
+        `<div class="scout-item"><b>${r.passed ? '通过' : r.event === 'escalated' ? '升级' : '未过'}</b> ${esc(String(r.task || '').slice(0, 22))}<span>${r.rootCause ? causeLabel[r.rootCause] || r.rootCause : ''}</span></div>`
+      ).join('');
+      el.innerHTML = `
+        <div class="scout-head">
+          <span>强化处理（失败任务错题本）</span>
+          <button class="scout-run" id="rfRunBtn" ${s.due ? '' : 'disabled'}>${s.due ? '立即补练' : '今日已完成'}</button>
+        </div>
+        <div class="scout-progress">队列 <b>${s.queue.pending}</b> 待练 · 已强化 ${s.queue.reinforced} · 待实验升级 ${s.queue.escalated} · 补练成功率 ${s.totals.successRate === null ? '—' : s.totals.successRate + '%'}</div>
+        ${recent || '<div class="scout-item" style="opacity:.7">暂无失败任务需要补练</div>'}`;
+      $('rfRunBtn').onclick = async () => {
+        const btn = $('rfRunBtn');
+        btn.disabled = true; btn.textContent = '补练中…';
+        const r = await api('/api/reinforce/run', { method: 'POST' });
+        toast(r.ok !== false && !r.error ? `补练完成：${r.passed}/${r.processed} 通过` : `补练未执行：${r.error || '已顺延'}`);
+        renderReinforce(afterEl);
+      };
+    } catch { el.innerHTML = ''; }
+  }
+
   // 外部学习（scout）区块：状态 + 今日进度 + 最近学到的机制 + 手动触发
   async function renderScout(afterEl) {
     let el = $('edScout');
@@ -961,8 +994,8 @@
       ? '进化 LLM：独立专用 API'
       : '进化 LLM：复用执行 API（可在设置中配置进化专用 API 避免抢配额）';
     const tipNow = $('edBatchTip'); if (tipNow) tipNow.after(srcEl); else $('edStats').after(srcEl);
-    // 外部学习区块：每日从 GitHub 热门 agent 项目学机制 → 迁移为本程序资产（技能/基因）
-    renderScout(srcEl);
+    // 强化处理 + 外部学习区块：补练自己的错题优先，学别人的机制其次
+    renderReinforce(srcEl).then(() => { const rf = $('edReinforce'); if (rf) renderScout(rf); else renderScout(srcEl); });
     const lastPromote = h.find(x=>x.promotion&&x.promotion.ok);
     if (lastPromote) {
       if (lastPromoteSeen && lastPromote.experiment !== lastPromoteSeen) toast(`版本升级到 v${lastPromote.promotion.version}`);

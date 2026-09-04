@@ -319,5 +319,38 @@ assert.strictEqual(JSON.parse(fs.readFileSync(path.join(evo.EV_ROOT,'genes.json'
   // liveStatus：total 只含必跑（训练池），holdout 单列
   const live=evo.liveStatus();
   if (live.active) { assert.ok(live.total<=live.cases.length,'必跑数应不超过全部 case 数'); assert.ok(live.holdoutTotal>=0,'应输出 holdout 数'); }
-  console.log('evolution smoke: ok — benchmark/worker/A-B/evaluator/regression/ledger/genes/objective/failure-modes/playbooks/lessons-promote/resume/batch/assets/cleanup/scout/detail/baseline-cache');
+  // ===== 强化处理（错题本闭环）：入队 → 分析 → 补练 → 沉淀 → 聚类提案 =====
+  const rf=require('../lib/reinforce');
+  assert.strictEqual(rf.needsReinforce({success:true,repairs:0}),false,'一次通过不应入队');
+  assert.strictEqual(rf.needsReinforce({success:true,repairs:2}),true,'返修≥2 应入队');
+  assert.strictEqual(rf.needsReinforce({success:false,repairs:0}),true,'失败应入队');
+  assert.ok(rf.enqueue('强化测试任务：创建双层目录并生成索引',{success:false,repairs:1}),'失败任务应入队');
+  assert.strictEqual(rf.enqueue('强化测试任务：创建双层目录并生成索引',{success:false}),null,'同任务应去重');
+  assert.strictEqual(rf.enqueue('',{success:false}),null,'空任务不入队');
+  // recordTaskOutcome 采集点挂钩：失败自动入队（走 evolution 层）
+  evo.recordTaskOutcome({success:false,repairs:0,task:'强化挂钩任务：天气查询失败重做'});
+  const q1=JSON.parse(fs.readFileSync(path.join(evo.EV_ROOT,'reinforce','queue.json'),'utf8'));
+  assert.ok(q1.items.some(i=>i.task.includes('强化挂钩任务')),'recordTaskOutcome 失败应自动入队');
+  // MOCK 补练：分析（固定简报）→ 重做成功 → 简报沉淀（流程性简报 → 技能）
+  const pr=await rf.processQueue({budget:5});
+  assert.strictEqual(pr.ok,true);
+  assert.ok(pr.processed>=2,'队列中的失败任务应被处理');
+  assert.ok(pr.passed>=1,'MOCK 补练应通过');
+  assert.ok(pr.promoted>=1,'通过的简报应沉淀');
+  const q2=JSON.parse(fs.readFileSync(path.join(evo.EV_ROOT,'reinforce','queue.json'),'utf8'));
+  assert.ok(q2.items.some(i=>i.status==='reinforced'),'通过任务应标记 reinforced');
+  // 沉淀分派单测：流程性简报（含步骤编号）→ 技能文件；一句话规则 → 基因候选入池
+  const skillPromo=rf.promoteBrief({task:'沉淀分派测试任务',rootCause:'planning_flaw'},'1. 先用 read 查看现状；\n2. 用 write 写入目标文件；\n3. 用 verify 核对后交付。');
+  assert.strictEqual(skillPromo.form,'skill','含步骤编号的简报应沉淀为技能');
+  assert.ok(fs.existsSync(path.join(root,'skills',skillPromo.target,'SKILL.md')),'强化技能文件已写入');
+  const genePromo=rf.promoteBrief({task:'沉淀分派测试任务B',rootCause:'tool_misuse'},'写入文件前必须先确认目标目录存在，禁止直接写入不存在的路径。');
+  assert.strictEqual(genePromo.form,'gene','一句话规则简报应沉淀为基因候选');
+  const rfSkillDir=fs.readdirSync(path.join(root,'skills')).filter(n=>n.startsWith('reinforce-'));
+  assert.ok(rfSkillDir.length>=1,'强化技能文件应存在于共享技能库');
+  // 聚类：同根因 3 次 escalated → proposal 注入 mutation prompt
+  rf.bumpCluster('planning_flaw','任务A'); rf.bumpCluster('planning_flaw','任务B'); rf.bumpCluster('planning_flaw','任务C');
+  const sec=rf.clustersPromptSection();
+  assert.ok(sec.includes('强化处理聚类提案')&&sec.includes('planning_flaw'.length?'规划缺陷':''),'聚类达标应生成提案段');
+  // 由于 buildMutationPrompt 的 reinforceSection 是 try-require('./reinforce')，MOCK 下直接验证 section 内容已覆盖
+  console.log('evolution smoke: ok — benchmark/worker/A-B/evaluator/regression/ledger/genes/objective/failure-modes/playbooks/lessons-promote/resume/batch/assets/cleanup/scout/detail/baseline-cache/reinforce');
 })().catch(e=>{console.error(e);process.exit(1)});
