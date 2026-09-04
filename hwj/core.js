@@ -315,12 +315,18 @@ async function runTask(input, ctx) {
 
   // 事件路由：过程落盘 + ui 透传（与 server handleEvent 同构）
   let pendingText = '';
+  let deltaReset = true;
   const flushText = () => {
     if (pendingText.trim()) appendProcess(ctx.ws, `\n### ${fmtClock(Date.now())} 💬 内层\n\n${pendingText.trim()}\n`);
     pendingText = '';
   };
   const handleEvent = (ev) => {
-    if (ev.type === 'text' && !ev.sub) { pendingText = ev.text; ui.setReply(ev.text); }
+    if (ev.type === 'text' && !ev.sub) { pendingText = ev.text; deltaReset = true; ui.setReply(ev.text); }
+    else if (ev.type === 'delta' && !ev.sub) {
+      // 增量渲染（P0-1 对齐 TUI）：快照后首个 delta 重置起点，其余追加
+      if (deltaReset) { pendingText = ev.text; deltaReset = false; } else pendingText += ev.text;
+      ui.setReply(pendingText);
+    }
     else if (ev.type === 'tool_call') {
       flushText();
       let pretty = ''; try { pretty = JSON.stringify(ev.args, null, 2); } catch { pretty = String(ev.args); }

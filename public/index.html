@@ -503,12 +503,18 @@
     addUser(text);
     const body = addMsg('msg-assistant', '');
     body.classList.add('typing-cursor');
-    let live = '', busyBar = addBusy();
+    let live = '', deltaReset = true, busyBar = addBusy();
     innerAbortCtrl = new AbortController();
     const paint = () => { body.innerHTML = mdRender(live); body.classList.add('typing-cursor'); scrollBottom(); };
     try {
       await streamSSE('/api/inner/chat', { message: finalText }, ev => {
-        if (ev.type === 'text') { fadeBusy(busyBar); live = ev.text; paint(); }
+        if (ev.type === 'text') { fadeBusy(busyBar); live = ev.text; deltaReset = true; paint(); }
+        else if (ev.type === 'delta') {
+          // 增量渲染：快照后的首个 delta 重置起点（防跨轮拼接），其余追加
+          if (deltaReset) { live = ev.text; deltaReset = false; } else live += ev.text;
+          paint();
+        }
+        else if (ev.type === 'round') { if (busyBar) busyBar.querySelector('.bt').textContent = `第 ${ev.round} 轮执行中…`; }
         else if (ev.type === 'usage') {
           const t = ev.totals||{}, k = n => n>=1000 ? (n/1000).toFixed(1)+'K' : String(n||0);
           const b = $('tokBadge'); b.style.display='inline';

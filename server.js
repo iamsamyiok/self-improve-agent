@@ -713,10 +713,14 @@ async function handleInnerChat(req, res, preBody, fromQueue) {
     } catch { return null; }
   };
   // 记忆预取（v0.9.31，对齐 Hermes 启动即注入的 push 模式；与 hwj/core.js 逐字对齐）：
-  // 任务开始前用用户消息跨层检索（语义 recall + 任务归档 archive_search），命中即注入消息尾部
-  // ——pull 模型下模型不主动 search 的遵循度问题由此根治；整体 4s 超时保护，失败/为空静默跳过
+  // 任务开始前用用户消息跨层检索（语义 recall + 任务归档 archive_search），命中即注入
+  // ——pull 模型下模型不主动 search 的遵循度问题由此根治。
+  // P0-2 并行化：预取不再阻塞任务发起（原 await 最长 4s 全额计入首字延迟）——
+  // 先短等 300ms（本地 BM25 常态内完成，命中则首轮即带上），未完成则后台继续，
+  // 完成后经 prefetchNote 从第二轮 notes 注入；整体 2s 超时保护，失败/为空静默跳过
+  let prefetchResult = undefined; // undefined=进行中 ''=完成无命中 string=命中内容
   try {
-    const prefetch = await Promise.race([
+    Promise.race([
       (async () => {
         const q = String(message || '').slice(0, 120);
         const emptyHit = s => !s || /为空|没有匹配|没有标签/.test(String(s).slice(0, 60));
@@ -730,13 +734,28 @@ async function handleInnerChat(req, res, preBody, fromQueue) {
         if (!emptyHit(arc)) parts.push(`【历史任务】\n${trim(arc)}`);
         return parts.length ? `\n\n[框架预取·相关记忆] 以下是自动检索到的与本任务相关的既有记忆与历史任务（仅供参考，与本任务无关时必须忽略，禁止被旧任务带偏目标）：\n${parts.join('\n')}\n需要更多细节可继续用 memory recall / archive_search 检索。` : '';
       })(),
-      new Promise(r => setTimeout(() => r(''), 4000))
+      new Promise(r => setTimeout(() => r(''), 2000))
+    ]).then(r => {
+      prefetchResult = r || '';
+      if (prefetchResult) send({ type: 'info', text: '已预取相关记忆与历史任务注入上下文' });
+    }).catch(() => { prefetchResult = ''; });
+    // 短等 300ms：本地检索（无 embedding 配置）常态内完成，命中则首轮上下文即带上
+    await Promise.race([
+      new Promise(r => { const ck = () => prefetchResult !== undefined ? r() : setTimeout(ck, 40); ck(); }),
+      new Promise(r => setTimeout(r, 300))
     ]);
-    if (prefetch) {
-      finalMsg += prefetch;
-      send({ type: 'info', text: '已预取相关记忆与历史任务注入上下文' });
+    if (prefetchResult) {
+      finalMsg += prefetchResult;
+      prefetchResult = ''; // 已拼入首消息，避免 prefetchNote 重复注入
     }
   } catch { /* 预取失败不影响任务 */ }
+  // prefetchNote：预取后台完成后的第二轮注入通道（inner.js 每轮 notes 构造时调用）
+  const prefetchNote = () => {
+    if (prefetchResult === undefined || !prefetchResult) return '';
+    const r = prefetchResult;
+    prefetchResult = '';
+    return r;
+  };
   // 教训卡注入（缺口经验运行时化）：与 core.js 同步对齐——历史任务核验 FAIL 的教训按
   // 任务相似度检索注入，零门槛即时生效，无需等待 A/B 实验晋级
   try {
@@ -940,6 +959,10 @@ async function handleInnerChat(req, res, preBody, fromQueue) {
       blackboardNote,
       shouldContinue,
       intentNote,
+      prefetchNote,
+      // 流式增量（P0-1）：inner.js 以 onEvent({type:'delta'}) 发出，handleEvent 统一 send 转发前端
+      // 轮开始进度（P0-1）：前端执行指示
+      onRoundStart: n => send({ type: 'round', round: n }),
       // 每轮落盘（v0.9.12 P0-2）：工具结果入列后立即持久化，崩溃/重启不丢进行中历史
       onRound: () => persistInnerMessages()
     });
