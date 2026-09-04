@@ -4,6 +4,17 @@
 
 > 核心原则：**修改不是改进，只有经过 Benchmark、Evaluator、Regression Guard 验证的候选版本，才有资格进入生产。**
 
+## 核心亮点
+
+- **可验证的自进化闭环**：真实任务沉淀为 Benchmark，候选改动在隔离沙箱与 Baseline 做 A/B，通过统计门槛（平均提升 / 胜率 / 回归上限）才自动晋级，全程可追溯、可回滚。
+- **强化处理（Reinforce）**：失败、返修、被撤回的任务自动进入补练队列——先在沙箱针对性重练过关（快速反馈层），再把经验沉淀为技能或进化基因走 A/B 转正（严谨验证层）；同类根因反复升级时自动聚类并注入进化视野。
+- **外部学习管道（Scout）**：每日空闲时扫描 GitHub 高星 Agent 项目，提炼值得借鉴的机制——知识类直接入库为技能（硬校验），行为类进入基因池走 A/B 验证，向社区「偷师」。
+- **统一空闲调度**：系统空闲时按「补练自己的错题 > 学习别人的经验」优先级自动运转，各有每日预算，不打扰正常任务。
+- **上下文预算中心（lib/limits.js）**：所有 LLM 输入限制以真实窗口实测值为唯一基准（512K 窗口 × 80% 安全比），对话预算、抓取截断、拼装上限、工具输出全链路对齐，长任务不再频繁压缩丢失关键依据。
+- **技能预取主动推送**：任务开始即按任务描述对全量技能库匹配（中英桥接），命中即提示先读技能再动手——清单被动注入的盲区由主动预取补齐；技能注册名冲突自动防护。
+- **渐进式披露的技能系统**：启动只注入「名称+描述」清单（≈100 token/技能），按需 skill.get 读全文，目录型技能自动生成捆绑资源清单；GitHub 一键安装。
+- **零依赖运行时**：除可选的向量检索增强外，只使用 Node.js 内置模块——tarball 内存解包、BM25、FTS、zip 容器解析全部内置。
+
 ## 1. 这版解决什么问题
 
 旧式 Agent 的闭环通常是：
@@ -76,7 +87,7 @@ Promote / Reject
 - Improvement Hypothesis
 - Candidate Mutation
 - 独立 Sandbox Worker
-- Baseline / Candidate A/B
+- Baseline / Candidate A/B（Baseline 缓存：版本指纹命中直接复用，实验时长约 1/4）
 - LLM Judge
 - Objective Artifact Check
 - Process Score
@@ -85,6 +96,25 @@ Promote / Reject
 - Promote / Reject
 - Snapshot / Rollback
 - Evolution History / Leaderboard
+- 强化处理（失败任务自动补练 + 经验沉淀）
+- 外部学习管道（GitHub 优秀实践自动发现与入库）
+- 进化专用 LLM 配置（进化实验/补练/学习可独立配 API 与模型）
+
+### Self-Healing & Learning
+
+- 失败任务自动入队补练（replay 双通道核验：目标断言或 LLM Judge）
+- 根因五分类分析 + 强化简报（≤200 字）
+- 补练过关后沉淀：步骤简报 → 技能；规则简报 → 基因池走 A/B
+- 同类根因聚类提示注入进化假设视野
+- Scout：GitHub topic 检索 → README 机制提炼 → 改造入库（skill 硬校验 / gene 走 A/B）
+
+### Context & Skill
+
+- 上下文预算中心：lib/limits.js 唯一基准（窗口实测 × 80% 安全比）
+- 滚动折叠 + 预算压缩：近期 tool 结果保全文，旧结果折叠摘要
+- 技能预取：任务文本匹配全量技能库（中英桥接），主动推送「先读技能再动手」
+- 技能注册名冲突防护：save/install 双通道校验
+- 清单渐进披露 + 截断盲区由预取覆盖
 
 ### Web UI
 
@@ -339,6 +369,9 @@ lib/
 ├── evolution.js          # Self-Improving 主循环
 ├── evolution-worker.js   # Sandbox 实验 Worker
 ├── regression.js         # 回归保护
+├── reinforce.js          # 强化处理：失败补练 + 经验沉淀
+├── scout.js              # 外部学习管道：GitHub 优秀实践发现与入库
+├── limits.js             # 上下文预算中心（窗口实测 × 80% 唯一基准）
 ├── inner.js              # 内层执行 Agent
 ├── outer.js              # 外层 Meta Agent
 ├── plugins.js            # Plugin Runtime
@@ -406,6 +439,15 @@ Prompt
 Skill
 Strategy
 Memory
+```
+
+已具备的自愈与学习能力：
+
+```text
+失败任务强化补练（Reinforce）
+根因聚类提示注入
+GitHub 外部机制学习（Scout）
+空闲统一调度（补练 > 学习，各有每日预算）
 ```
 
 下一阶段建议继续增加：

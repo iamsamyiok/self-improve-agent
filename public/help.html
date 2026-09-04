@@ -15,7 +15,7 @@
 <div class="card callout"><b>最重要的一句话：</b>你平时只需要和 <b>Inner Agent</b> 对话。系统会在后台积累任务经验、寻找改进机会、进行隔离实验，并在实验真正证明变好后自动升级。你不需要逐项审批它的修改。<b>🧬 进化史</b>负责把这些变化用人话告诉你；<b>🧩 插件</b>和<b>⚙ 设置</b>属于低频管理功能。</div>
 
 <div class="card"><b>目录</b><div class="toc">
-<a href="#quick">1. 五分钟上手</a><a href="#architecture">2. 整体架构</a><a href="#task">3. 一次任务到底发生什么</a><a href="#evolution">4. 什么时候会进化</a><a href="#history">5. 怎么看进化史</a><a href="#loop">6. Self-Improving Loop 完整过程</a><a href="#memory">7. 记忆系统</a><a href="#plugins">8. 插件系统</a><a href="#skills">9. Skills 技能系统</a><a href="#quality">10. 质量、安全与回滚</a><a href="#ui">11. 界面说明</a><a href="#config">12. 配置与环境变量</a><a href="#cli">13. 命令行</a><a href="#data">14. 数据保存在哪里</a><a href="#faq">15. 常见问题</a><a href="#dev">16. 开发者说明</a>
+<a href="#quick">1. 五分钟上手</a><a href="#architecture">2. 整体架构</a><a href="#task">3. 一次任务到底发生什么</a><a href="#evolution">4. 什么时候会进化</a><a href="#history">5. 怎么看进化史</a><a href="#loop">6. Self-Improving Loop 完整过程</a><a href="#memory">7. 记忆系统</a><a href="#plugins">8. 插件系统</a><a href="#skills">9. Skills 技能系统</a><a href="#selfheal">10. 强化处理与外部学习</a><a href="#quality">11. 质量、安全与回滚</a><a href="#ui">12. 界面说明</a><a href="#config">13. 配置与环境变量</a><a href="#cli">14. 命令行</a><a href="#data">15. 数据保存在哪里</a><a href="#faq">16. 常见问题</a><a href="#dev">17. 开发者说明</a>
 </div></div>
 
 <h2 id="quick">1. 五分钟上手</h2>
@@ -62,20 +62,23 @@
 <div class="card"><p>插件是 Agent 的“手”。每个插件通常承担一个清晰职责，并向模型声明参数 Schema 和执行入口。</p><table><tr><th>类别</th><th>典型能力</th></tr><tr><td>文件</td><td>read / write / edit</td></tr><tr><td>命令</td><td>bash / shell 类任务</td></tr><tr><td>搜索</td><td>本地或配置好的搜索能力</td></tr><tr><td>验证</td><td>verify 等质量检查</td></tr><tr><td>记忆</td><td>recall / archive 等经验操作</td></tr></table><p>日常使用不需要管理插件。点击顶部 <b>🧩 插件</b> 才进入插件管理页面。插件的源码编辑、导入、AI 修复等属于低频维护功能。</p></div>
 
 <h2 id="skills">9. Skills 技能系统</h2>
-<div class="card"><p>插件解决“能做什么”，Skill 更接近“应该怎么做”。Skill 可以提供某类任务的工作方法、约束、检查清单和最佳实践。</p><p>Self-Improvement 可以针对 Skill 做实验。例如发现某类任务经常遗漏最终验证，可以提出一个更强的验证 Skill，然后用历史任务比较效果。</p></div>
+<div class="card"><p>插件解决“能做什么”，Skill 更接近“应该怎么做”。Skill 可以提供某类任务的工作方法、约束、检查清单和最佳实践。</p><p><b>渐进式加载：</b>系统启动时只把「名称 + 描述」清单注入上下文（每个约 100 token），Agent 判断任务与某技能匹配时才读取全文——省 token 又不失专业性。目录型技能还会自动生成捆绑资源清单（脚本、模板、参考文件），照抄路径即可使用。</p><p><b>技能预取（v3.4.0）：</b>任务开始时系统会自动把你的任务描述与全部技能库匹配（支持中英文桥接，例如「深度调研」能匹配到英文描述的 research 类技能），命中即主动提示 Agent「先读技能全文、按其步骤执行」。清单按字母排序最多展示 40 个，预取匹配覆盖全量，排序靠后不会被遗漏。</p><p>Self-Improvement 可以针对 Skill 做实验。例如发现某类任务经常遗漏最终验证，可以提出一个更强的验证 Skill，然后用历史任务比较效果。</p></div>
 
-<h2 id="quality">10. 质量、安全与回滚</h2>
+<h2 id="selfheal">10. 强化处理与外部学习</h2>
+<div class="card"><h3>强化处理（Reinforce）——自己的错题自己练</h3><p>任务失败、返修两次以上、被中断或被撤回时，系统会自动把这类任务加入补练队列。空闲时（不影响你正常使用）它会：</p><ol><li><b>归因：</b>分析失败根因（工具误用 / 知识缺口 / 规划缺陷 / 验收误读 / 外部依赖）。</li><li><b>补练：</b>在隔离沙箱中重做同一任务，直到过关（用客观断言或 LLM 评审双通道核验）。</li><li><b>沉淀：</b>把有效经验写成简报——操作步骤类沉淀为<b>技能</b>（低风险直接入库），行为规则类进入<b>基因池</b>走 A/B 实验验证后才生效。</li></ol><p>同一类根因反复升级解决不了时，系统会自动聚类并在下一次进化实验的视野里标注，推动结构性修复。你可以在「🧬 进化史」抽屉的<b>强化处理</b>区块查看队列、补练进度和沉淀结果，也可以点击「立即补练」。</p><h3>外部学习（Scout）——向社区偷师</h3><p>系统空闲时还会扫描 GitHub 上的高星 Agent 项目（每日有预算上限），从它们的 README 中提炼值得借鉴的机制：</p><table><tr><th>借鉴类型</th><th>处理方式</th></tr><tr><td>知识 / 方法论（如调试流程、写作规范）</td><td>硬校验（必须引用真实工具、字数达标）后直接入库为技能</td></tr><tr><td>行为 / 策略（如检索排序、任务拆分方式）</td><td>进入基因池，走 A/B 实验证明有效后才启用</td></tr></table><p>原则与自进化一致：<b>先学习，再验证，后启用。</b>外部经验同样不享有免检特权。</p><h3>什么时候运行？</h3><p>两者都在系统空闲时（没有任务执行、没有进化实验）自动运行，每 30 分钟检查一次，优先级为「补练自己的错题 &gt; 学习别人的经验」，各自每天最多处理 5 个，不会影响正常任务。</p></div>
+
+<h2 id="quality">11. 质量、安全与回滚</h2>
 <div class="card"><h3>为什么 Candidate 不直接覆盖当前版本？</h3><p>因为 Agent 很容易产生“局部变好、整体变坏”的修改。Candidate 会在实验目录中运行，生产环境保持不变。</p><h3>Regression Guard</h3><p>默认门槛包括最低样本数、平均提升、胜率以及严重回归限制。具体参数可通过环境变量调整。</p><h3>回滚</h3><p>插件类 Promote 复用快照/预检/热加载管线；出现问题可以回滚到之前的状态。策略类进化则以 Evolution State 的版本方式保存。</p></div>
 <div class="card danger"><b>安全边界：</b>自动进化的目标是让 Agent 在已有能力边界内更稳定、更高效，而不是让它无条件获得系统权限。涉及高风险生产环境时，应关闭自动 Promote，并增加人工 Gate、代码审查或外部 CI。</div>
 
-<h2 id="ui">11. 界面说明</h2>
+<h2 id="ui">12. 界面说明</h2>
 <div class="card"><table><tr><th>按钮</th><th>用途</th><th>日常频率</th></tr><tr><td>聊天区域</td><td>与 Inner Agent 完成真实工作</td><td><span class="tag g">每天</span></td></tr><tr><td>🧬 进化史</td><td>查看 Agent 最近发生了什么变化以及为什么</td><td><span class="tag b">偶尔</span></td></tr><tr><td>🧩 插件</td><td>查看、编辑、导入和维护插件</td><td><span class="tag a">低频</span></td></tr><tr><td>⚙ 设置</td><td>模型、API、工作区等基础配置</td><td><span class="tag a">低频</span></td></tr><tr><td>帮助</td><td>查看本说明</td><td><span class="tag b">需要时</span></td></tr></table><p>Outer Agent 不再作为日常聊天窗口占据主界面。它是后台 Meta-Agent 的实现入口；用户主要通过“进化史”理解它产生的变化。</p></div>
 
-<h2 id="config">12. 配置与环境变量</h2>
+<h2 id="config">13. 配置与环境变量</h2>
 <div class="card"><table><tr><th>变量</th><th>作用</th><th>默认</th></tr><tr><td><code>DUAL_AGENT_AUTO_EVOLVE</code></td><td>是否自动触发 Evolution；设为 0 关闭</td><td>开启</td></tr><tr><td><code>DUAL_AGENT_AUTO_PROMOTE</code></td><td>实验通过后是否自动升级；设为 0 关闭</td><td>开启</td></tr><tr><td><code>DUAL_AGENT_EVOLUTION_MIN_CASES</code></td><td>第一次正式实验所需最少 Benchmark</td><td>3</td></tr><tr><td><code>DUAL_AGENT_EVOLUTION_MAX_CASES</code></td><td>最多保留/使用的 Benchmark 数量</td><td>50</td></tr><tr><td><code>DUAL_AGENT_EVOLUTION_MIN_DELTA</code></td><td>最低平均提升阈值</td><td>0.03</td></tr><tr><td><code>DUAL_AGENT_EVOLUTION_MIN_WIN_RATE</code></td><td>最低胜率</td><td>0.60</td></tr><tr><td><code>DUAL_AGENT_EVOLUTION_MAX_REGRESSION</code></td><td>允许的单案例严重回归阈值</td><td>0.08</td></tr><tr><td><code>DUAL_AGENT_MOCK</code></td><td>演示/测试模式</td><td>关闭</td></tr><tr><td><code>DUAL_AGENT_OPENCODE_CMD</code></td><td>指定外层 OpenCode 命令</td><td>自动检测</td></tr></table><p>生产环境建议先保持默认设置。若希望完全停止自动自我修改，可使用：</p><pre>DUAL_AGENT_AUTO_EVOLVE=0
 DUAL_AGENT_AUTO_PROMOTE=0</pre></div>
 
-<h2 id="cli">13. 命令行</h2>
+<h2 id="cli">14. 命令行</h2>
 <div class="card"><pre># 启动 Web
 npm start
 
@@ -91,7 +94,7 @@ hwj-agent evolve --promote
 # 安静执行
 node hwj/hwj.js --script "读取 hello.txt" --quiet</pre><p>Web UI 自动进化和命令行 Evolution 使用同一个 Evolution Engine。</p></div>
 
-<h2 id="data">14. 数据保存在哪里</h2>
+<h2 id="data">15. 数据保存在哪里</h2>
 <div class="card"><pre>.data/
 ├── evolution/
 │   ├── benchmarks/       # 可重放任务样本
@@ -105,14 +108,17 @@ node hwj/hwj.js --script "读取 hello.txt" --quiet</pre><p>Web UI 自动进化�
 workspaces/
 └── default/               # 用户工作区</pre><p>这些运行数据不应该进入源码发布包。清洁源码 ZIP 不包含 <code>node_modules</code>、<code>.data</code>、工作区运行数据和 <code>.git</code>。</p></div>
 
-<h2 id="faq">15. 常见问题</h2>
-<div class="card"><h3>Q：我聊天两次，为什么没有进化？</h3><p>A：正常。默认至少需要 3 个成功 Benchmark。系统宁可多收集一点真实任务，也不根据两个样本乱改 Agent。</p><h3>Q：第三个任务完成后是不是一定升级？</h3><p>A：不是。第三个任务只是允许启动实验。Meta-Agent 可能认为没有可靠改进点，或者 Candidate 没有通过 A/B 和 Regression Guard。此时原版本继续工作。</p><h3>Q：进化会不会直接改坏我的程序？</h3><p>A：Candidate 先在隔离实验环境中验证；只有通过质量闸门才 Promote。插件 Promote 还会经过现有的快照/预检/热加载管线。</p><h3>Q：为什么进化史还是空的？</h3><p>A：最常见原因是 Benchmark 尚未达到最低数量，或者外层 OpenCode 没有配置/无法启动。进化史只记录正式实验，不会为了让页面“有数据”而伪造成功。</p><h3>Q：可以关闭自动进化吗？</h3><p>A：可以：<code>DUAL_AGENT_AUTO_EVOLVE=0</code>。也可以只关闭自动升级：<code>DUAL_AGENT_AUTO_PROMOTE=0</code>。</p><h3>Q：我能手动实验吗？</h3><p>A：可以运行 <code>hwj-agent evolve</code>。手动和自动使用同一套 Benchmark、A/B、Evaluator 和 Regression Guard。</p><h3>Q：插件是不是每次都要我自己选？</h3><p>A：不需要。插件是 Agent 的工具层，正常任务由 Agent 自己选择。用户只有在维护系统时才进入 🧩 插件。</p><h3>Q：这个项目和普通 Agent 有什么根本区别？</h3><p>A：普通 Agent 的循环通常是“任务 → 执行 → 结果”。这里增加了第二个闭环：“真实任务 → 经验 → 假设 → 候选 → 实验 → 评价 → 晋级/丢弃”，让系统可以基于真实使用结果持续寻找下一版本。</p></div>
+<h2 id="faq">16. 常见问题</h2>
+<div class="card"><h3>Q：我聊天两次，为什么没有进化？</h3><p>A：正常。默认至少需要 3 个成功 Benchmark。系统宁可多收集一点真实任务，也不根据两个样本乱改 Agent。</p><h3>Q：第三个任务完成后是不是一定升级？</h3><p>A：不是。第三个任务只是允许启动实验。Meta-Agent 可能认为没有可靠改进点，或者 Candidate 没有通过 A/B 和 Regression Guard。此时原版本继续工作。</p><h3>Q：进化会不会直接改坏我的程序？</h3><p>A：Candidate 先在隔离实验环境中验证；只有通过质量闸门才 Promote。插件 Promote 还会经过现有的快照/预检/热加载管线。</p><h3>Q：为什么进化史还是空的？</h3><p>A：最常见原因是 Benchmark 尚未达到最低数量，或者外层 OpenCode 没有配置/无法启动。进化史只记录正式实验，不会为了让页面“有数据”而伪造成功。</p><h3>Q：可以关闭自动进化吗？</h3><p>A：可以：<code>DUAL_AGENT_AUTO_EVOLVE=0</code>。也可以只关闭自动升级：<code>DUAL_AGENT_AUTO_PROMOTE=0</code>。</p><h3>Q：我能手动实验吗？</h3><p>A：可以运行 <code>hwj-agent evolve</code>。手动和自动使用同一套 Benchmark、A/B、Evaluator 和 Regression Guard。</p><h3>Q：插件是不是每次都要我自己选？</h3><p>A：不需要。插件是 Agent 的工具层，正常任务由 Agent 自己选择。用户只有在维护系统时才进入 🧩 插件。</p><h3>Q：强化处理和外部学习会干扰我正常使用吗？</h3><p>A：不会。两者只在系统空闲时运行（没有任务、没有进化实验），每天各有处理上限，被中断也不会影响当前任务。你可以在进化史抽屉里随时查看或手动触发。</p><h3>Q：这个项目和普通 Agent 有什么根本区别？</h3><p>A：普通 Agent 的循环通常是“任务 → 执行 → 结果”。这里增加了第二个闭环：“真实任务 → 经验 → 假设 → 候选 → 实验 → 评价 → 晋级/丢弃”，让系统可以基于真实使用结果持续寻找下一版本。</p></div>
 
-<h2 id="dev">16. 开发者说明</h2>
+<h2 id="dev">17. 开发者说明</h2>
 <div class="card"><p>主要目录：</p><pre>lib/inner.js             # Inner Agent 工具调用循环
 lib/outer.js             # Meta-Agent / OpenCode 运行入口
 lib/evolution.js         # Evolution Engine
 lib/evolution-worker.js  # 隔离实验 Worker
+lib/reinforce.js         # 强化处理：失败补练与经验沉淀
+lib/scout.js             # 外部学习：GitHub 机制发现与入库
+lib/limits.js            # 上下文预算中心（窗口 80% 基准）
 lib/approval.js          # 快照、预检、热加载、回滚
 lib/plugins.js           # 插件运行时
 lib/intent.js            # 意图与验收条件
