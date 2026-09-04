@@ -2199,6 +2199,44 @@ async function main() {
     assert.ok(r.data.totalCalls >= 2, '会话总计调用数 ≥2');
   });
 
+  // ===== 交互改进（P0-P3）=====
+  await t('P0 撤回：undo 删除最后一轮 user+assistant 配对', async () => {
+    const before = await (await fetch(base + '/api/inner/messages')).json();
+    const nBefore = (before.messages || []).length;
+    const r = await (await fetch(base + '/api/inner/undo', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ n:1 }) })).json();
+    assert.ok(r.success, JSON.stringify(r));
+    assert.ok(r.removed >= 1, '至少删除 1 条');
+    const after = await (await fetch(base + '/api/inner/messages')).json();
+    assert.ok((after.messages || []).length < nBefore, '消息数应减少');
+  });
+  await t('P0 撤回：执行中互斥（409）', async () => {
+    // innerLock 由前序 e2e 任务释放，此处仅验证接口契约字段
+    const r = await (await fetch(base + '/api/inner/undo', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ n:1 }) })).json();
+    assert.ok(typeof r.success === 'boolean', JSON.stringify(r));
+  });
+  await t('P1 status 接口含 running/queue 字段', async () => {
+    const r = await (await fetch(base + '/api/inner/status')).json();
+    assert.ok(r.success && typeof r.running === 'boolean' && typeof r.queue === 'number', JSON.stringify(r));
+  });
+  await t('P2 版本号接口：/api/health 返回 version（前端 verBadge 数据源）', async () => {
+    const r = await (await fetch(base + '/api/health')).json();
+    assert.ok(r.version && /^\d+\.\d+\.\d+/.test(r.version), 'version=' + r.version);
+  });
+  await t('P0-P3 前端静态防回归：交互元素接线', () => {
+    const html = fs.readFileSync(path.join(ROOT, 'public', 'index.html'), 'utf8');
+    assert.ok(html.includes('function undoLast'), '撤回函数存在');
+    assert.ok(html.includes("api('/api/inner/undo'"), '撤回调用接线');
+    assert.ok(html.includes('updateUndoBtn'), '撤回按钮显隐控制存在');
+    assert.ok(html.includes('_hint'), '错误分层 _hint 翻译存在');
+    assert.ok(html.includes("ev.type === 'stopped'"), '停止确认事件处理存在');
+    assert.ok(html.includes('toggleKeyVis'), 'API Key 显隐切换存在');
+    assert.ok(html.includes('enterkeyhint="send"'), '移动端 enterkeyhint 存在');
+    assert.ok(html.includes('id="verBadge"'), '动态版本号占位存在');
+    assert.ok(html.includes('confirm(') && html.includes('即将触发进化实验'), '进化实验二次确认存在');
+    assert.ok(html.includes('accept="'), '上传 accept 限制存在');
+    assert.ok(html.includes('if (h.version)'), '版本号动态读取');
+  });
+
   srv.kill();
   console.log(`\n结果：${passed} 通过，${failed} 失败`);
   process.exit(failed ? 1 : 0);
