@@ -2237,6 +2237,78 @@ async function main() {
     assert.ok(html.includes('if (h.version)'), '版本号动态读取');
   });
 
+  // ===== 身份语义修复（v3.4：主语限定 + 我是谁口径 + system prompt 身份锚定）=====
+  const { matchSmallTalk } = require(path.join(ROOT, 'lib', 'smalltalk.js'));
+  await t('身份：含「谁」的普通问题不被误截为身份卡', () => {
+    assert.strictEqual(matchSmallTalk('谁是最可爱的人'), null, '文学问题应走 LLM');
+    assert.strictEqual(matchSmallTalk('谁是最可爱的人？'), null);
+    assert.strictEqual(matchSmallTalk('什么人最伟大'), null, '无 Agent 主语不命中');
+    assert.strictEqual(matchSmallTalk('他叫什么名字'), null, '第三人称不命中');
+    assert.strictEqual(matchSmallTalk('查查今日有啥大事'), null, '任务消息不受影响');
+  });
+  await t('身份：「我是谁」回答用户身份（语义与你是谁相反）', () => {
+    const r = matchSmallTalk('我是谁');
+    assert.ok(r && r.includes('老板'), '应说明用户是老板：' + r);
+  });
+  await t('身份：问 Agent 身份仍走产品口径', () => {
+    assert.ok(matchSmallTalk('你是谁').includes('HWJ Agent'));
+    assert.ok(matchSmallTalk('你叫什么名字').includes('HWJ Agent'));
+    assert.ok(matchSmallTalk('你是机器人吗').includes('HWJ Agent'));
+    assert.ok(matchSmallTalk('who are you').includes('HWJ Agent'));
+  });
+  await t('身份：称呼类问题不再漏网进 LLM（Agnes 泄漏入口）', () => {
+    const r = matchSmallTalk('你要叫我什么啊');
+    assert.ok(r && r.includes('HWJ') && r.includes('老板'), '应同时交代自己和用户称呼：' + r);
+    assert.ok(matchSmallTalk('怎么称呼你').includes('HWJ Agent'));
+  });
+  await t('身份：system prompt 锚定产品身份（Agnes/Sapiens 防泄漏）', () => {
+    const src = fs.readFileSync(path.join(ROOT, 'server.js'), 'utf8');
+    assert.ok(src.includes('你是 HWJ Agent'), '内层 system prompt 声明 HWJ 身份');
+    assert.ok(src.includes('禁止自称或影射任何其他名字'), '禁止底层模型自我认知泄漏');
+    assert.ok(src.includes('HWJ Agent 的子智能体'), '子智能体身份锚定');
+    const st = fs.readFileSync(path.join(ROOT, 'lib', 'smalltalk.js'), 'utf8');
+    assert.ok(st.includes('您是老板'), '「我是谁」口径落库');
+  });
+
+  // ===== 进化专用 LLM 配置 + 限流自适应（v3.4）=====
+  await t('进化 LLM：evolution 段保存/打码/回退（POST /api/config）', async () => {
+    const post = await (await fetch(base + '/api/config', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ evolution: { base_url:'https://evo.example.com/v1', model:'evo-mini', api_key:'sk-evo-test-123' } }) })).json();
+    assert.ok(post.success, JSON.stringify(post));
+    const get = await (await fetch(base + '/api/config')).json();
+    const evo = get.config && get.config.evolution;
+    assert.ok(evo && evo.base_url === 'https://evo.example.com/v1' && evo.model === 'evo-mini', 'evolution 段已保存');
+    assert.ok(/ˣˣˣˣ/.test(evo.api_key), 'evolution key 打码返回');
+    assert.ok(get.config.inner && get.config.inner.base_url, 'inner 段不受影响');
+  });
+  await t('进化 LLM：evoConfig 配置齐全用 evolution 段，缺省回退 inner', () => {
+    const evo = require(path.join(ROOT, 'lib', 'evolution.js'));
+    assert.ok(typeof evo.evoConfig === 'function' && typeof evo.evoLlmSource === 'function', '导出 evoConfig/evoLlmSource');
+    const cfg = evo.evoConfig();
+    assert.ok(cfg.base_url && cfg.api_key && cfg.model, 'evolution 段齐全时优先使用');
+    assert.strictEqual(evo.evoLlmSource(), 'evolution');
+  });
+  await t('进化 LLM：isRateLimitText 特征判定', () => {
+    const evo = require(path.join(ROOT, 'lib', 'evolution.js'));
+    assert.ok(evo.isRateLimitText('API 错误 429: too many requests'));
+    assert.ok(evo.isRateLimitText('账号配额不足 quota exceeded'));
+    assert.ok(evo.isRateLimitText('服务过载 overloaded'));
+    assert.strictEqual(evo.isRateLimitText('文件不存在'), false, '普通错误不误判');
+  });
+  await t('限流自适应：wave 循环含降档/冷却/回升/补跑逻辑', () => {
+    const src = fs.readFileSync(path.join(ROOT, 'lib', 'evolution.js'), 'utf8');
+    assert.ok(src.includes('DUAL_AGENT_EVOLUTION_COOLDOWN_MS'), '冷却窗口可配');
+    assert.ok(src.includes('pendingQueue.push(o.c)'), '被限流 case 挪回队尾补跑');
+    assert.ok(src.includes('cleanWaves >= 3 && par < PAR_MAX'), '连续干净后并发回升');
+    assert.ok(src.includes('rateLimitEvents:rateLimitEvents.slice(0,20)'), '限流事件随 decision 落盘');
+  });
+  await t('前端静态：进化 API 设置区与 llmSource 展示接线', () => {
+    const html = fs.readFileSync(path.join(ROOT, 'public', 'index.html'), 'utf8');
+    assert.ok(html.includes('id="suEvoUrl"') && html.includes('id="suEvoModel"') && html.includes('id="suEvoKey"'), '进化 API 三字段存在');
+    assert.ok(html.includes('进化专用 API（可选'), '折叠区标题存在');
+    assert.ok(html.includes("payload.evolution"), '保存时提交 evolution 段');
+    assert.ok(html.includes("srcEl.id = 'edLlmSrc'"), '进化抽屉 llmSource 展示存在');
+  });
+
   srv.kill();
   console.log(`\n结果：${passed} 通过，${failed} 失败`);
   process.exit(failed ? 1 : 0);

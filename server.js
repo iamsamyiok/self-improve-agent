@@ -96,6 +96,13 @@ function saveConfig(patch) {
     if (!String(patch.embedding.api_key || '').trim() && (cfg.embedding || {}).api_key) next.embedding.api_key = cfg.embedding.api_key;
     if (/ˣ{4}/.test(patch.embedding.api_key || '')) next.embedding.api_key = (cfg.embedding || {}).api_key || '';
   }
+  // evolution 段（进化专用 LLM，v3.4）：可选——留空/未配置时进化回退 inner 段。
+  // 空 key 与打码回传保留原值，语义与 inner/embedding 一致
+  if (patch.evolution && typeof patch.evolution === 'object') {
+    next.evolution = { ...(cfg.evolution || {}), ...patch.evolution };
+    if (!String(patch.evolution.api_key || '').trim() && (cfg.evolution || {}).api_key) next.evolution.api_key = cfg.evolution.api_key;
+    if (/ˣ{4}/.test(patch.evolution.api_key || '')) next.evolution.api_key = (cfg.evolution || {}).api_key || '';
+  }
   fs.mkdirSync(DATA_DIR, { recursive: true });
   try {
     // WSL-SteadyKey 原子写三步：旧配置备份 .bak → tmp 写入 + fsync → rename 原子替换
@@ -125,7 +132,9 @@ function maskedConfig() {
   const profiles = validProfiles(cfg).map(p => ({ ...p, api_key: maskKey(p.api_key) }));
   const embedding = { ...(cfg.embedding || {}) };
   if (embedding.api_key) embedding.api_key = maskKey(embedding.api_key);
-  return { ...cfg, inner: { ...cfg.inner, api_key: maskKey(k) }, embedding, inner_profiles: profiles };
+  const evolution = { ...(cfg.evolution || {}) };
+  if (evolution.api_key) evolution.api_key = maskKey(evolution.api_key);
+  return { ...cfg, inner: { ...cfg.inner, api_key: maskKey(k) }, embedding, evolution, inner_profiles: profiles };
 }
 
 // ---------- 多工作区（内层插件默认工作目录，记忆/技能随工作区隔离） ----------
@@ -443,7 +452,7 @@ function buildInnerSystemPrompt(cwd) {
     .replace('{FORGE_DIR}', plugins.FORGE_DIR) + geneSection;
 }
 const INNER_SYSTEM_PROMPT_BASE = [
-  '你是内层执行 Agent，通过调用插件完成任务，完成后用简洁中文总结。当前日期：{TODAY}（涉及"最新/近期"的搜索与判断以此为准）。',
+  '你是 HWJ Agent——一个在用户工作区运行的、会动手执行任务的自进化智能体。你是产品 HWJ Agent 的本体：禁止自称或影射任何其他名字（包括但不限于 Agnes、Sapiens、Claude、GPT、通义等模型或厂商名），禁止讨论底层模型、供应商或训练方；被问到身份一律以 HWJ Agent 口径回答。称呼用户为「老板」或「您」。通过调用插件完成任务，完成后用简洁中文总结。当前日期：{TODAY}（涉及"最新/近期"的搜索与判断以此为准）。',
   '',
   '## 任务执行前必须：',
   '1. 先调用 memory.search(query="任务关键词") 检索相关记忆，将结果作为背景参考——注意：记忆是历史任务的沉淀，仅当内容与本任务直接相关才使用；与本任务话题无关的记忆必须忽略，禁止被旧任务记忆带偏当前任务的目标',
@@ -582,23 +591,8 @@ setInterval(() => {
 // preBody：队列消化时已解析的请求体（跳过 readBody，配 mock req）
 // fromQueue：队列消化调用——跳过锁检查（刚释放的锁归队首所有）
 // 闲聊识别与产品化直答（v1.3.9+ 体验修复：身份问题不再交给底层模型即兴发挥）
-function matchSmallTalk(message) {
-  const m = String(message || '').trim();
-  if (!m || m.length > 30) return null; // 长文本必是任务
-  const identityRe = /(你|智能体|机器人|agent|助手|助理)?(是|叫|叫做)?谁|你是谁|你叫什么|你的名字|介绍下?你自己|自我介绍|who are you|what are you|introduce yourself/i;
-  const abilityRe = /你能(做|干)什么|你会(什么|做|干什么)|你有什么(功能|能力|用)|能帮我(做|干)什么|what can you do|你的功能/i;
-  const greetRe = /^(你好|您好|嗨|哈喽|hello|hi|hey|在吗|在么)[!！?？.。~～\s]*$/i;
-  if (identityRe.test(m)) {
-    return '我是 HWJ Agent——一个会动手执行任务的自进化智能体。给我一个任务，比如创建文件、整理资料、做计算或写文档，我会规划步骤、动手完成，并在交付前自动核验质量。每完成一个任务，我还会积累经验、持续进化。';
-  }
-  if (abilityRe.test(m)) {
-    return '我可以直接在你的工作区里干活：创建和编辑文件、整理数据、真实计算、写文档和表格，交付前会自动核验是否达标。完成任务的同时我会积累经验，越用越顺手。想做什么，直接说就行。';
-  }
-  if (greetRe.test(m)) {
-    return '你好！我是 HWJ Agent。有什么任务想让我帮忙，直接说就行——写个文档、算点数据、整理资料都可以。';
-  }
-  return null;
-}
+// v3.4 提取至 lib/smalltalk.js：主语限定防误截 + 「我是谁」口径修正 + 称呼类兜底
+const { matchSmallTalk } = require('./lib/smalltalk');
 
  async function handleInnerChat(req, res, preBody, fromQueue) {
  const body = preBody !== undefined ? preBody : await readBody(req);
@@ -830,7 +824,7 @@ function matchSmallTalk(message) {
  const SUB_RETRY_BASE_MS = 1500;
  const SUB_RR = { n: 0 }; // 轮转计数器：跨子任务递增，均匀分摊
  const SUB_SYSTEM_BASE = [
-   '你是子智能体，负责独立完成一个调研/探索型子任务并返回结论。',
+   '你是 HWJ Agent 的子智能体，负责独立完成一个调研/探索型子任务并返回结论。结论中不得自称任何其他名字（包括底层模型/厂商名），统一以「子智能体」或 HWJ Agent 名义表述。',
    '规则：1) 直接执行，不要建 todo 清单；2) 结论必须自包含（数字/路径/关键原文），主会话看不到你的中间过程；',
    '3) 只做只读探索（read/search/fetch/memory），除非子任务明确要求写文件；4) 结论 ≤300 字，先给结果再给一句依据；',
    '5) 你的默认工作目录是 Agent 工作区（通常只有日志文件）。调研目标文件不存在时，先用 bash pwd/ls 定位实际路径',

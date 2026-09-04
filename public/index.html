@@ -223,6 +223,9 @@
   #setupMsg { min-height:18px; font-size:12.5px; margin-top:9px; color:var(--green,#34D399); white-space:pre-wrap; word-break:break-all; }
   #setupMsg.err { color:#F87171; }
   .su-tip { font-size:11.5px; color:var(--text-3,#8A94A3); line-height:1.6; margin-top:8px; }
+  .su-adv { margin-top:10px; border-top:1px dashed var(--border,#262C33); padding-top:8px; }
+  .su-adv summary { font-size:12px; color:var(--text-2,#B8C0CC); cursor:pointer; user-select:none; }
+  .su-adv[open] summary { margin-bottom:4px; }
   .su-key-toggle { background:none; border:none; cursor:pointer; font-size:14px; padding:4px 6px; margin-left:6px; border-radius:6px; color:var(--text-3,#8A94A3); }
   .su-key-toggle:hover { background:var(--border,#262C33); }
   /* 手机：输入区避开底部手势条 */
@@ -343,6 +346,15 @@
     <button type="button" class="su-key-toggle" onclick="toggleKeyVis()" title="显示/隐藏 API Key">👁</button>
   </label>
   <label class="su-label">模型名<input id="suModel" placeholder="例如 deepseek-chat / gpt-4o-mini" autocomplete="off" spellcheck="false"></label>
+  <details class="su-adv">
+    <summary>进化专用 API（可选，高级）</summary>
+    <p class="su-tip" style="margin:6px 0">为自进化实验单独配置 LLM，与执行任务互不抢配额；建议填便宜的快模型。留空则复用上方执行 API。</p>
+    <label class="su-label">Base URL<input id="suEvoUrl" placeholder="留空 = 复用执行 API" autocomplete="off" spellcheck="false"></label>
+    <label class="su-label">API Key
+      <input id="suEvoKey" type="password" placeholder="留空表示保持不变" autocomplete="new-password">
+    </label>
+    <label class="su-label">模型名<input id="suEvoModel" placeholder="例如 deepseek-chat / gpt-4o-mini" autocomplete="off" spellcheck="false"></label>
+  </details>
   <div class="su-row">
     <button class="su-btn ghost" onclick="testLlm()">测试连接</button>
     <button class="su-btn main" onclick="saveSetup()">保存</button>
@@ -762,6 +774,15 @@
       batchEl.id = 'edBatchTip';
       $('edStats').after(batchEl);
     }
+    // 进化 LLM 配置来源：独立 = 专用 API 不与执行抢配额；inner = 回退共用执行 API
+    const srcEl = $('edLlmSrc') || document.createElement('div');
+    srcEl.id = 'edLlmSrc';
+    srcEl.className = 'ed-sec';
+    srcEl.style.cssText = 'font-size:12px;color:var(--text-3);padding:6px 2px 0';
+    srcEl.textContent = st.llmSource === 'evolution'
+      ? '进化 LLM：独立专用 API'
+      : '进化 LLM：复用执行 API（可在设置中配置进化专用 API 避免抢配额）';
+    const tipNow = $('edBatchTip'); if (tipNow) tipNow.after(srcEl); else $('edStats').after(srcEl);
     const lastPromote = h.find(x=>x.promotion&&x.promotion.ok);
     if (lastPromote) {
       if (lastPromoteSeen && lastPromote.experiment !== lastPromoteSeen) toast(`版本升级到 v${lastPromote.promotion.version}`);
@@ -942,6 +963,9 @@
       const r = await api('/api/config'); const c = (r.config && r.config.inner) || {};
       $('suUrl').value = c.base_url || ''; $('suModel').value = c.model || ''; $('suKey').value = '';
       $('suKey').placeholder = (c.api_key ? '已配置（' + c.api_key + '）' : '尚未配置') + ' · 留空不修改';
+      const ev = (r.config && r.config.evolution) || {};
+      $('suEvoUrl').value = ev.base_url || ''; $('suEvoModel').value = ev.model || ''; $('suEvoKey').value = '';
+      $('suEvoKey').placeholder = (ev.api_key ? '已配置（' + ev.api_key + '）' : '尚未配置') + ' · 留空不修改';
     } catch (e) { /* 接口异常也允许手填 */ }
     setupMsg(''); $('setupMask').classList.add('show'); $('setupCard').classList.add('show');
   }
@@ -955,8 +979,15 @@
   async function saveSetup() {
     const inner = { base_url: $('suUrl').value.trim(), model: $('suModel').value.trim(), api_key: $('suKey').value.trim() };
     if (!inner.base_url || !inner.model) { setupMsg('Base URL 与模型名为必填项', true); return; }
+    // 进化专用 API（可选）：三项全空 = 回退复用执行 API；任一填写则三项作为整体提交
+    const evoUrl = $('suEvoUrl').value.trim(), evoModel = $('suEvoModel').value.trim(), evoKey = $('suEvoKey').value.trim();
+    const partial = (evoUrl || evoModel || evoKey) && !(evoUrl && evoModel);
+    if (partial) { setupMsg('进化 API：Base URL 与模型名需同时填写（或全部留空复用执行 API）', true); return; }
+    const payload = { inner };
+    if (evoUrl && evoModel) payload.evolution = { base_url: evoUrl, model: evoModel, api_key: evoKey };
+    else if (!evoUrl && !evoModel && !evoKey) payload.evolution = { base_url: '', model: '', api_key: '' }; // 显式清空=回退
     setupMsg('保存中…');
-    const r = await api('/api/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ inner }) });
+    const r = await api('/api/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
     if (r.success) {
       setupMsg('已保存 ✓ 可以开始对话了');
       toast('配置已保存', { duration: 3000 });

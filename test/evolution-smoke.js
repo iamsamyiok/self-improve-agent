@@ -68,6 +68,11 @@ assert.ok(evoSrc.includes('function newBenchmarksSinceLastExp'),'攒批计数函
 assert.ok(evoSrc.includes('resumable.state.selected'),'续跑复用原 case 清单');
 const srvSrc2=fs.readFileSync(require('path').join(__dirname,'..','server.js'),'utf8');
 assert.ok(srvSrc2.includes('newBenchmarksSinceLastExp() >=') && srvSrc2.includes('DUAL_AGENT_EVOLUTION_MIN_NEW_CASES'),'自动触发带攒批门槛（多次聊天合并分析）');
+// ===== 进化专用 LLM 配置（独立段 + 回退）=====
+assert.ok(evoSrc.includes('function evoConfig'),'evoConfig 配置回退函数存在');
+assert.ok(evoSrc.includes('cfg.evolution'),'读取 config.json evolution 段');
+assert.ok(evoSrc.includes('evoConfig()'),'Meta-Agent/judge/课程统一走进化配置');
+assert.ok(evoSrc.includes('llmSource:evoLlmSource()'),'decision 记录配置来源');
 const innerSrc=fs.readFileSync(require('path').join(__dirname,'..','lib','inner.js'),'utf8');
 assert.ok(innerSrc.includes('DUAL_AGENT_EVOLUTION_WORKER') && innerSrc.includes('payload.temperature'),'实验 worker 路径必须注入温度控制');
 assert.ok(evoSrc.includes('DUAL_AGENT_EVOLUTION_PREFILTER') && evoSrc.includes('prefilterReject'),'3-case 快筛必须存在且可通过 env 关闭');
