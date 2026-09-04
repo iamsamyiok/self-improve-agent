@@ -8,7 +8,7 @@ const assert = require('assert');
 
 const ROOT = path.join(__dirname, '..');
 const TMP = path.join('/tmp', 'da-smoke-' + Date.now().toString(36));
-const PORT = 3900 + Math.floor(Math.random() * 90);
+const PORT = Number(process.env.DUAL_AGENT_SMOKE_PORT) || (3900 + Math.floor(Math.random() * 90));
 let passed = 0, failed = 0;
 
 function t(name, fn) {

@@ -468,6 +468,27 @@
 
   /* ---------- 发送 ---------- */
   let busy = false, innerAbortCtrl = null;
+  // 断线恢复（短板中7）：SSE 意外断开时轮询任务状态（最长 30 分钟，任务级超时上限），
+  // 任务结束后拉取最近消息恢复最终回答；恢复期间 busyBar 显示等待状态
+  async function recoverAfterDisconnect(busyBar) {
+    const t0 = Date.now(), LIMIT = 30 * 60 * 1000;
+    while (Date.now() - t0 < LIMIT) {
+      await new Promise(r => setTimeout(r, 3000));
+      let st = null;
+      try { st = await (await fetch('/api/inner/status')).json(); } catch { continue; }
+      if (st && st.success && !st.running) {
+        try {
+          const d = await (await fetch('/api/inner/messages')).json();
+          const msgs = (d.messages || []).filter(m => m.role === 'assistant');
+          const last = msgs[msgs.length - 1];
+          if (last && String(last.content || '').trim()) { live = String(last.content); deltaReset = true; paintNow(); }
+        } catch { /* 拉取失败仍算恢复（视图对齐尽力而为） */ }
+        if (busyBar) busyBar.querySelector('.bt').textContent = '已恢复';
+        return true;
+      }
+    }
+    return false;
+  }
   function autoGrow(t){ t.style.height='auto'; t.style.height=Math.min(t.scrollHeight,180)+'px'; }
   function quickAsk(t){ if (busy) return; $('input').value=t; autoGrow($('input')); send(); }
   function stopGen(){ if (innerAbortCtrl) innerAbortCtrl.abort(); }
@@ -505,14 +526,18 @@
     body.classList.add('typing-cursor');
     let live = '', deltaReset = true, busyBar = addBusy();
     innerAbortCtrl = new AbortController();
-    const paint = () => { body.innerHTML = mdRender(live); body.classList.add('typing-cursor'); scrollBottom(); };
+    // 渲染节流（短板中6）：delta 期间全量 mdRender + innerHTML 是 O(n²)，打字机期间
+    // 以 100ms 节流渲染，轮末 text 快照强制立即渲染一次保证最终一致
+    let paintTimer = null;
+    const paintNow = () => { if (paintTimer) { clearTimeout(paintTimer); paintTimer = null; } body.innerHTML = mdRender(live); body.classList.add('typing-cursor'); scrollBottom(); };
+    const paintThrottled = () => { if (paintTimer) return; paintTimer = setTimeout(() => { paintTimer = null; body.innerHTML = mdRender(live); body.classList.add('typing-cursor'); scrollBottom(); }, 100); };
     try {
       await streamSSE('/api/inner/chat', { message: finalText }, ev => {
-        if (ev.type === 'text') { fadeBusy(busyBar); live = ev.text; deltaReset = true; paint(); }
+        if (ev.type === 'text') { fadeBusy(busyBar); live = ev.text; deltaReset = true; paintNow(); }
         else if (ev.type === 'delta') {
-          // 增量渲染：快照后的首个 delta 重置起点（防跨轮拼接），其余追加
+          // 增量渲染：快照后的首个 delta 重置起点（防跨轮拼接），其余追加；节流渲染
           if (deltaReset) { live = ev.text; deltaReset = false; } else live += ev.text;
-          paint();
+          paintThrottled();
         }
         else if (ev.type === 'round') { if (busyBar) busyBar.querySelector('.bt').textContent = `第 ${ev.round} 轮执行中…`; }
         else if (ev.type === 'usage') {
@@ -533,8 +558,13 @@
         else if (ev.type === 'error') { addError(ev.content); }
       });
     } catch (e) {
-      if (e.name !== 'AbortError') addError(e.message);
-      else addSystem('已停止');
+      if (e.name !== 'AbortError') {
+        // 断线恢复（短板中7）：网络中断时任务仍在后台执行——轮询 /api/inner/status，
+        // running 归零后拉取最终消息对齐视图；恢复失败再降级为普通错误提示
+        addSystem('连接中断，任务仍在后台执行，正在恢复…');
+        const recovered = await recoverAfterDisconnect(busyBar);
+        if (!recovered) addError(e.message);
+      } else addSystem('已停止');
     }
     fadeBusy(busyBar);
     body.classList.remove('typing-cursor');

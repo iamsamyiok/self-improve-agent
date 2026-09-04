@@ -53,6 +53,13 @@ const expSrc=fs.readFileSync(require('path').join(__dirname,'..','lib','experien
 assert.ok(expSrc.includes('embedQueryCached'),'query embedding 缓存存在（experience 语义召回）');
 const memSrc=fs.readFileSync(require('path').join(__dirname,'..','plugins','memory.js'),'utf8');
 assert.ok(memSrc.includes('embedQueryCached'),'query embedding 缓存存在（memory recall）');
+// ===== 短板修复（高1-4 / 中9）=====
+assert.ok(evoSrc.includes("judgeOrder:flip?'cand-first':'base-first'"),'judge 展示顺序随机化且落盘审计（高1）');
+assert.ok(evoSrc.includes('function bootstrapCI') && evoSrc.includes('lowConfidence'),'bootstrap 置信区间 + low-confidence 标记（高2）');
+assert.ok(evoSrc.includes("fs.renameSync(tmp, fp)"),'writeJson 原子替换（高3）');
+assert.ok(!evoSrc.includes('withStateLock'),'同步读改写天然原子，不得残留未使用的锁机制（高3 复核）');
+assert.ok(evoSrc.includes('function checkMutationWatchdog') && evoSrc.includes('checkMutationWatchdog(rec)'),'晋级后退化看门狗接线（高4）');
+assert.ok(evoSrc.includes('watchdog-log.jsonl'),'看门狗审计日志落盘（高4）');
 const innerSrc=fs.readFileSync(require('path').join(__dirname,'..','lib','inner.js'),'utf8');
 assert.ok(innerSrc.includes('DUAL_AGENT_EVOLUTION_WORKER') && innerSrc.includes('payload.temperature'),'实验 worker 路径必须注入温度控制');
 assert.ok(evoSrc.includes('DUAL_AGENT_EVOLUTION_PREFILTER') && evoSrc.includes('prefilterReject'),'3-case 快筛必须存在且可通过 env 关闭');

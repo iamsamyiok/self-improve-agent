@@ -1448,6 +1448,12 @@ const server = http.createServer(async (req, res) => {
       json(res, 200, { success: true, messages: innerMessages.filter(m => m.role !== 'system').slice(-60) });
       return;
     }
+    // 任务运行状态（短板中7）：前端 SSE 断线后轮询此接口恢复感知——running 为真说明
+    // 任务仍在后台执行，等结束后拉 messages 即可对齐视图
+    if (p === '/api/inner/status' && req.method === 'GET') {
+      json(res, 200, { success: true, running: !!innerLock, queue: innerQueue.length });
+      return;
+    }
     // ---------- 会话管理（v1.3.2：延续不清空，明确新建才换新） ----------
     if (p === '/api/sessions' && req.method === 'GET') {
       const idx = sessionMeta();
