@@ -108,7 +108,9 @@
   /* 空状态 */
   #welcome { max-width:768px; margin:0 auto; padding:9vh 20px 20px; text-align:center; }
   #welcome h1 { font-size:28px; font-weight:700; letter-spacing:-.5px; margin-bottom:10px; background:linear-gradient(135deg, var(--brand), var(--brand-2)); -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; }
-  .welcome-sub { font-size:13.5px; color:var(--text-3); margin-bottom:30px; }
+  .welcome-sub { font-size:13.5px; color:var(--text-3); margin-bottom:12px; }
+  .growth-line { font-size:12px; color:var(--green-dark); background:var(--green-light); border-radius:999px; padding:4px 14px; display:inline-block; margin-bottom:26px; }
+  .growth-line:empty { display:none; }
   .sug-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; text-align:left; }
   .sug { border:1px solid var(--border); border-radius:var(--radius); padding:13px 15px; cursor:pointer; transition:border-color .18s, box-shadow .18s, transform .18s; background:#fff; }
   .sug:hover { border-color:#c7c9f4; box-shadow:0 4px 16px rgba(99,102,241,.1); transform:translateY(-1px); }
@@ -117,17 +119,18 @@
 
   /* ============ 输入区 ============ */
   .composer-wrap { padding:8px 20px calc(14px + env(safe-area-inset-bottom, 0px)); flex-shrink:0; background:linear-gradient(transparent, var(--bg) 30%); }
-  .composer { max-width:768px; margin:0 auto; display:flex; align-items:flex-end; gap:8px; border:1px solid var(--border-2); border-radius:26px; padding:9px 9px 9px 16px; background:#fff; box-shadow:0 2px 12px rgba(0,0,0,.04); transition:box-shadow .2s, border-color .2s; }
-  .composer:focus-within { border-color:#b9bcf0; box-shadow:0 4px 20px rgba(99,102,241,.13); }
-  .composer textarea { flex:1; border:none; outline:none; resize:none; font:inherit; font-size:15px; line-height:1.6; max-height:180px; min-height:60px; /* 两行高度：1.6 行距 × 15px × 2 行 + 上下 padding 12px */ background:transparent; color:var(--text); padding:6px 0; }
+  .composer { max-width:768px; margin:0 auto; display:flex; align-items:flex-end; gap:10px; border:1px solid var(--border-2); border-radius:26px; padding:7px 7px 7px 8px; background:#fff; box-shadow:0 2px 14px rgba(0,0,0,.05); transition:box-shadow .2s, border-color .2s; }
+  .composer:focus-within { border-color:#b9bcf0; box-shadow:0 4px 22px rgba(99,102,241,.14); }
+  .composer textarea { flex:1; border:none; outline:none; resize:none; font:inherit; font-size:15px; line-height:1.55; max-height:184px; min-height:26px; /* 单行起步（ChatGPT 式），autoGrow 随内容增高 */ background:transparent; color:var(--text); padding:8px 0; }
   .composer textarea::placeholder { color:var(--text-3); }
   .composer textarea:disabled { color:var(--text-3); }
-  .c-btn { width:36px; height:36px; border-radius:50%; border:none; background:linear-gradient(135deg, var(--brand), var(--brand-2)); color:#fff; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:filter .15s, transform .1s; flex-shrink:0; }
+  /* ChatGPT 式按钮组：左侧上传（幽灵圆钮），右侧发送（空态置灰、有内容点亮） */
+  .c-btn { width:38px; height:38px; border-radius:50%; border:none; background:linear-gradient(135deg, var(--brand), var(--brand-2)); color:#fff; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:filter .15s, transform .1s, background .2s; flex-shrink:0; }
   .c-btn:hover { filter:brightness(.92); }
   .c-btn:active { transform:scale(.94); }
-  .c-btn:disabled { background:#d9d9e3; filter:none; cursor:not-allowed; }
+  .c-btn:disabled { background:#e3e3ea; filter:none; cursor:default; }
   .c-btn.ghost { background:transparent; color:var(--text-3); }
-  .c-btn.ghost:hover { background:var(--bubble); }
+  .c-btn.ghost:hover { background:var(--bubble); filter:none; }
   .c-btn.stop { background:var(--text); display:none; }
   .c-btn.stop.show { display:flex; }
   .composer-hint { max-width:768px; margin:7px auto 0; text-align:center; font-size:11px; color:var(--text-3); }
@@ -204,7 +207,7 @@
     .msg-user { max-width:86%; }
     .composer-wrap { padding-left:12px; padding-right:12px; }
     .composer { border-radius:22px; padding:7px 7px 7px 13px; }
-    .composer textarea { font-size:16px; min-height:64px; } /* 防 iOS 聚焦自动缩放；16px 行高下两行 64px */
+    .composer textarea { font-size:16px; min-height:26px; } /* 防 iOS 聚焦自动缩放；单行起步 */
     .c-btn { width:40px; height:40px; }
     .composer-hint { display:none; }
     .sug-grid { grid-template-columns:1fr; gap:9px; }
@@ -321,6 +324,7 @@
       <div id="welcome">
         <h1>有什么可以帮忙的？</h1>
         <div class="welcome-sub">交给我的任务会被规划、执行并自动核验交付，完成质量会沉淀为进化证据</div>
+        <div class="growth-line" id="growthLine"></div>
         <div class="sug-grid">
           <div class="sug" onclick="quickAsk('创建 notes.txt，写 3 条今日待办，每条一行')"><b>写点东西</b><span>创建待办、笔记、文档</span></div>
           <div class="sug" onclick="quickAsk('创建 students.csv（name,age,score 表头加 5 行数据），再创建 analysis.md 报告平均分和最高分学生')"><b>算点东西</b><span>数据文件与真实计算</span></div>
@@ -336,15 +340,12 @@
     <button class="c-btn ghost" id="uploadBtn" title="上传文档（doc 插件可读取）" onclick="$('fileInput').click()">
       <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
     </button>
-    <textarea id="input" rows="2" placeholder="给 Agent 一个任务，每个完成的任务都会成为进化证据…" oninput="autoGrow(this)" enterkeyhint="send"></textarea>
+    <textarea id="input" rows="1" placeholder="给 Agent 一个任务…" oninput="autoGrow(this)" enterkeyhint="send"></textarea>
         <button class="c-btn" id="sendBtn" onclick="send()" title="发送">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
         </button>
         <button class="c-btn stop" id="stopBtn" onclick="stopGen()" title="停止生成">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
-        </button>
-        <button class="c-btn ghost" id="undoBtn" onclick="undoLast()" title="撤回上一条对话（P0）" style="display:none">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 10h10a5 5 0 0 1 0 10H9"/><polyline points="7 6 3 10 7 14"/></svg>
         </button>
       </div>
       <div class="composer-hint">Agent 会自动使用工具、自我核验交付，并从每个任务中积累进化证据</div>
@@ -584,7 +585,12 @@
     }
     return false;
   }
-  function autoGrow(t){ t.style.height='auto'; t.style.height=Math.min(t.scrollHeight,180)+'px'; }
+  function autoGrow(t){
+    t.style.height='auto'; t.style.height=Math.min(t.scrollHeight,184)+'px';
+    // ChatGPT 式发送键：空输入置灰（disabled），有内容点亮
+    const btn = $('sendBtn');
+    if (btn && !busy) btn.disabled = !t.value.trim();
+  }
   function quickAsk(t){ if (busy) return; $('input').value=t; autoGrow($('input')); send(); }
   function stopGen(){ if (innerAbortCtrl) innerAbortCtrl.abort(); }
   // 插件名 → 用户视角的自然语言（技术细节不暴露）
@@ -603,26 +609,7 @@
     return d;
   }
   function fadeBusy(bar){ if (!bar) return; bar.classList.add('fade'); setTimeout(()=>bar.remove(), 550); }
-  // P0 撤回：弹出最近一轮 user+assistant，后端原子删除，前端同步回滚 DOM
-  async function undoLast(){
-    const d = await api('/api/inner/undo', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ n:1 }) });
-    if (!d.success) { toastErr(d, '撤回失败'); return; }
-    if (d.removed === 0) { toast('没有可撤回的对话'); return; }
-    // 回滚：移除最后一条 assistant 气泡和它前面的 user 气泡
-    const msgs = $('msgs');
-    const items = Array.from(msgs.children);
-    let removed = 0;
-    for (let i = items.length - 1; i >= 0 && removed < d.removed; i--) {
-      const el = items[i];
-      if (el.classList.contains('msg-assistant') || el.classList.contains('msg-user')) { el.remove(); removed++; }
-    }
-    // 若 busyBar 存在也一起清掉
-    const bar = msgs.querySelector('.busy-bar');
-    if (bar) bar.remove();
-    $('tokBadge').style.display = 'none';
-    scrollBottom();
-    toast('已撤回 ' + d.removed + ' 条消息');
-  }
+  // 撤回入口已按用户反馈移除（交互噪音）；/api/inner/undo 接口保留供 API 调用
 
   async function send() {
     if (busy) return;
@@ -695,12 +682,6 @@
     input.disabled = false; $('sendBtn').style.display='flex'; $('stopBtn').classList.remove('show');
     input.focus();
     refreshEvoSilent();
-    // P0 撤回按钮显隐：有消息才显示
-    updateUndoBtn();
-  }
-  function updateUndoBtn(){
-    const hasMsg = $('msgs') && $('msgs').children.length > 0;
-    $('undoBtn').style.display = hasMsg ? 'flex' : 'none';
   }
 
   /* ---------- 进化过程实时视图 ---------- */
@@ -777,8 +758,9 @@
     const benchmarks = Number(st.benchmarks)||0, min = Number(st.minBenchmarks)||3;
     const promoted = h.filter(x=>x.promotion&&x.promotion.ok).length;
     const version = state.version || 0;
-    // 顶栏 pill + 侧栏徽标
-    $('evoPillText').textContent = st.running ? '进化实验进行中' : `v${version} · 样本 ${benchmarks} · 实验 ${h.length}`;
+    // 顶栏 pill + 侧栏徽标：健康分优先展示（版本外快速表征系统变好），无数据时退回样本数
+    const healthTxt = (st.health && typeof st.health.score === 'number') ? `健康 ${st.health.score} · ` : '';
+    $('evoPillText').textContent = st.running ? '进化实验进行中' : `${healthTxt}v${version} · 样本 ${benchmarks} · 实验 ${h.length}`;
     $('evoPulse').classList.toggle('live', !!st.running);
     $('navEvoBadge').textContent = 'v' + version;
     $('evoSampleText').textContent = `样本 ${benchmarks}${benchmarks>=min?'（已达标）':''}`;
@@ -789,6 +771,21 @@
     // 抽屉内部
     $('edRunning').classList.toggle('show', !!st.running);
     $('edRunBtn').disabled = !!st.running || !st.autoEvolve;
+    // 经验资产格：替换「当前版本」格（版本号 pill/趋势里都有），版本外的快速成长指标
+    const a = st.assets || {};
+    const assetTotal = (a.lessons || 0) + (a.playbooks || 0) + (a.genes || 0) + (a.skills || 0);
+    $('edStats').innerHTML = `
+      <div class="stat"><b>${assetTotal}</b><span>经验资产</span></div>
+      <div class="stat"><b>${benchmarks}</b><span>进化样本</span></div>
+      <div class="stat"><b>${h.length}</b><span>实验次数</span></div>
+      <div class="stat"><b style="color:${promoted?'var(--green)':'inherit'}">${promoted}</b><span>成功进化</span></div>`;
+    // 欢迎页成长统计行：让「系统越来越好」在主界面可见（随每次任务增长）
+    const growth = $('growthLine');
+    if (growth) {
+      growth.textContent = assetTotal > 0
+        ? `已积累 ${a.lessons || 0} 条经验教训 · ${a.playbooks || 0} 个执行套路 · ${a.enabledGenes || 0}/${a.genes || 0} 条启用基因，且每完成一个任务都在增长`
+        : '';
+    }
     if (!st.running) { // 运行结束时轮询自动刷新（渲染由触发方处理）
       if (renderEvo._wasRunning && !silent) { toast('进化实验已结束'); }
     }
@@ -802,11 +799,6 @@
       rEl.textContent = '检测到上次实验中断：已完成的对比进度已保存，下次实验将自动从断点继续';
       $('edStats').before(rEl);
     } else { const r = $('edResumeTip'); if (r) r.remove(); }
-    $('edStats').innerHTML = `
-      <div class="stat"><b>v${version}</b><span>当前版本</span></div>
-      <div class="stat"><b>${benchmarks}</b><span>进化样本</span></div>
-      <div class="stat"><b>${h.length}</b><span>实验次数</span></div>
-      <div class="stat"><b style="color:${promoted?'var(--green)':'inherit'}">${promoted}</b><span>成功进化</span></div>`;
     // 系统健康分卡：效果评估视图——分数语义（≥80 绿 / 60-79 黄 / <60 红）+ 构成 + 版本对比
     const hc = $('edHealth');
     if (st.health && typeof st.health.score === 'number') {
@@ -968,13 +960,11 @@
       if (p.answer) { const b = addMsg('msg-assistant',''); b.innerHTML = mdRender(p.answer); }
     }
     const box = $('chat'); box.scrollTop = box.scrollHeight;
-    updateUndoBtn();
   }
   async function newChat(keepWs){
     await api('/api/inner/reset', { method:'POST' });
     $('msgs').innerHTML = ''; showChat(true);
     $('tokBadge').style.display = 'none';
-    updateUndoBtn();
     if (!keepWs) loadWorkspaces();
   }
 
@@ -1006,7 +996,7 @@
     bar.innerHTML = '<span class="ic spinner"></span><span>任务执行中（页面刷新恢复）· 完整过程实时记录中</span>';
     $('msgs').appendChild(bar); showChat(false); scrollBottom();
     const timer = setInterval(async () => {
-      try { const s = await api('/api/process'); if (!s.running) { clearInterval(timer); bar.remove(); busy=false; $('input').disabled=false; $('sendBtn').style.display='flex'; $('stopBtn').classList.remove('show'); loadHistory(); refreshEvoSilent(); } } catch { updateUndoBtn(); }
+      try { const s = await api('/api/process'); if (!s.running) { clearInterval(timer); bar.remove(); busy=false; $('input').disabled=false; $('sendBtn').style.display='flex'; $('stopBtn').classList.remove('show'); loadHistory(); refreshEvoSilent(); } } catch {}
     }, 2500);
   }
 

@@ -2224,9 +2224,10 @@ async function main() {
   });
   await t('P0-P3 前端静态防回归：交互元素接线', () => {
     const html = fs.readFileSync(path.join(ROOT, 'public', 'index.html'), 'utf8');
-    assert.ok(html.includes('function undoLast'), '撤回函数存在');
-    assert.ok(html.includes("api('/api/inner/undo'"), '撤回调用接线');
-    assert.ok(html.includes('updateUndoBtn'), '撤回按钮显隐控制存在');
+    // 撤回按钮已按用户反馈移除（接口保留）；断言防回归：前端不再出现撤回入口
+    assert.ok(!html.includes('undoLast'), '前端撤回函数已移除');
+    assert.ok(!html.includes('updateUndoBtn'), '撤回按钮显隐逻辑已移除');
+    assert.ok(!html.includes('id="undoBtn"'), '撤回按钮 DOM 已移除');
     assert.ok(html.includes('_hint'), '错误分层 _hint 翻译存在');
     assert.ok(html.includes("ev.type === 'stopped'"), '停止确认事件处理存在');
     assert.ok(html.includes('toggleKeyVis'), 'API Key 显隐切换存在');
@@ -2313,6 +2314,9 @@ async function main() {
     assert.ok(html.includes('id="edHealth"'), '健康分卡片存在');
     assert.ok(html.includes('系统健康分'), '健康分标题存在');
     assert.ok(html.includes('hc-trend'), '版本对比趋势展示存在');
+    assert.ok(html.includes('growthLine'), '欢迎页成长统计行存在');
+    assert.ok(html.includes('健康 ${st.health.score}'), '顶栏 pill 含健康分');
+    assert.ok(html.includes('经验资产'), '抽屉经验资产格存在');
     const srv = fs.readFileSync(path.join(ROOT, 'server.js'), 'utf8');
     assert.ok(srv.includes('taskT0'), '任务计时起点存在');
     assert.ok(srv.includes('healthDropping()'), '退化触发线接入自动进化');
