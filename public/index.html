@@ -751,9 +751,9 @@
           </div>
           <div style="font-size:12.5px;color:var(--text-2);margin-bottom:10px;">
             <span class="spinner" style="display:inline-block;vertical-align:-2px;margin-right:7px;"></span>
-            ${total ? `正在逐个对比任务表现 · ${done}/${total} 已完成` : '正在准备实验环境…'}
+            ${total ? `正在逐个对比任务表现 · ${done}/${total} 已完成${d.holdoutTotal ? `（另有 ${d.holdoutTotal} 个复验任务仅在候选通过后执行）` : ''}` : '正在准备实验环境…'}
           </div>
-          <div class="exp-plain">同一批任务会分别在当前版本和候选版本上真实执行，逐个比较质量。整个过程自动完成，通常需要几分钟。</div>
+          <div class="exp-plain">同一批任务会分别在当前版本和候选版本上真实执行，逐个比较质量；候选未通过时复验任务直接跳过。已执行过的任务结果会缓存复用，越用越快。</div>
         </div>
         <div class="ed-actions"><button class="btn-sub" onclick="backToMain()">返回概览</button></div>`;
       const el = $('lvElapsed'); if (el) el.textContent = '已进行 ' + fmtDur(d.elapsedSec||0);

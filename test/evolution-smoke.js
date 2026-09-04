@@ -297,5 +297,27 @@ assert.strictEqual(JSON.parse(fs.readFileSync(path.join(evo.EV_ROOT,'genes.json'
   const promoDetail=evo.listEvoDetail('promotions',20);
   assert.ok(Array.isArray(promoDetail),'晋级明细应返回数组');
   assert.ok(evo.listEvoDetail('unknown',20).length===0,'未知类型应返回空数组');
-  console.log('evolution smoke: ok — benchmark/worker/A-B/evaluator/regression/ledger/genes/objective/failure-modes/playbooks/lessons-promote/resume/batch/assets/cleanup/scout/detail');
+  // ===== baseline 缓存：同版本二跑应命中缓存跳过 baseline worker；版本变化应失效 =====
+  const rb1=await evo.runEvolution({promote:false,mutation:{type:'strategy',target:'verification',reason:'缓存测试1',hypothesis:'h1',change:{verification:'strong'}}});
+  assert.strictEqual(rb1.ok,true);
+  const cacheRoot=path.join(evo.EV_ROOT,'baseline-cache');
+  const fps=fs.readdirSync(cacheRoot);
+  assert.strictEqual(fps.length,1,'应只产生一个版本指纹缓存目录');
+  const rb2=await evo.runEvolution({promote:false,mutation:{type:'strategy',target:'verification',reason:'缓存测试2',hypothesis:'h2',change:{memoryTopK:5}}});
+  const row2=JSON.parse(fs.readFileSync(path.join(evo.EV_ROOT,'experiments',rb2.experiment,'cases',rb2.results[0].benchmark,'result.json'),'utf8'));
+  assert.strictEqual(row2.baseline.cached,true,'同版本二跑 baseline 应命中缓存（cached:true）');
+  // 缓存应恢复工作区产物（objective 核验可用）
+  assert.ok(fs.existsSync(path.join(evo.EV_ROOT,'experiments',rb2.experiment,'cases',rb2.results[0].benchmark,'baseline','workspace')),'命中缓存后 baseline 工作区应已恢复');
+  // 版本指纹变化（启用基因变更）→ 缓存失效，新指纹目录
+  const genesDb=JSON.parse(fs.readFileSync(path.join(evo.EV_ROOT,'genes.json'),'utf8'));
+  genesDb.genes.push({id:'g-cache-test',text:'缓存失效测试基因',enabled:true,category:'general',stats:{trials:0,wins:0,losses:0},createdAt:new Date().toISOString()});
+  fs.writeFileSync(path.join(evo.EV_ROOT,'genes.json'),JSON.stringify(genesDb));
+  const rb3=await evo.runEvolution({promote:false,mutation:{type:'strategy',target:'verification',reason:'缓存测试3',hypothesis:'h3',change:{toolSelection:'conservative'}}});
+  const row3=JSON.parse(fs.readFileSync(path.join(evo.EV_ROOT,'experiments',rb3.experiment,'cases',rb3.results[0].benchmark,'result.json'),'utf8'));
+  assert.notStrictEqual(row3.baseline.cached,true,'版本指纹变化后缓存应失效重跑');
+  assert.strictEqual(fs.readdirSync(cacheRoot).length,2,'应产生第二个指纹目录');
+  // liveStatus：total 只含必跑（训练池），holdout 单列
+  const live=evo.liveStatus();
+  if (live.active) { assert.ok(live.total<=live.cases.length,'必跑数应不超过全部 case 数'); assert.ok(live.holdoutTotal>=0,'应输出 holdout 数'); }
+  console.log('evolution smoke: ok — benchmark/worker/A-B/evaluator/regression/ledger/genes/objective/failure-modes/playbooks/lessons-promote/resume/batch/assets/cleanup/scout/detail/baseline-cache');
 })().catch(e=>{console.error(e);process.exit(1)});
