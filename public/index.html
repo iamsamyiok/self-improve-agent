@@ -207,7 +207,7 @@
 <body>
 <div id="app">
   <aside id="sidebar">
-    <div class="sb-brand"><div class="logo">HW</div><b>HWJ Agent</b><span class="ver">v3.0.1</span></div>
+    <div class="sb-brand"><div class="logo">HW</div><b>HWJ Agent</b><span class="ver">v3.1.0</span></div>
     <button class="sb-new" onclick="newChat()">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
       新对话
@@ -308,6 +308,7 @@
       <div class="stat-grid" id="edStats"></div>
       <div class="ed-actions">
         <button class="btn-main" id="edRunBtn" onclick="runEvolutionNow()">立即触发一次进化实验</button>
+        <button class="btn-main" id="edGrowBtn" onclick="growPoolNow()" style="margin-left:8px;opacity:.85">扩充任务池</button>
         <button class="btn-sub" id="liveBtn" onclick="showLive()">进化过程</button>
       </div>
       <div class="ed-sec">实验时间线（新 → 旧）</div>
@@ -625,10 +626,24 @@
       const r = d.result || {};
       if (r.stage === 'no-op') toast('Meta-Agent 判断证据不足，主动跳过本轮实验');
       else if (r.stage === 'promoted') toast(`实验通过，已进化到 v${r.promotion?.version ?? ''}`);
+      else if (r.stage === 'holdout-rejected') toast('实验通过训练池，但 holdout 复验未过（疑似过拟合），已拒绝晋级');
       else if (r.summary) toast(`实验结束：${r.summary.pass ? '通过' : '未达标，已拒绝'}`);
       else toast(d.error || r.error || '实验已结束');
     } catch (e) { toast('触发失败：' + e.message); }
     btn.textContent = '立即触发一次进化实验';
+    refreshEvo();
+  }
+
+  async function growPoolNow(){
+    const btn = $('edGrowBtn');
+    btn.disabled = true; btn.textContent = '生成任务中…';
+    try {
+      const d = await api('/api/evolution/grow-pool', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ count:3 }) });
+      const r = d.result || {};
+      const okN = (r.created || []).filter(c => c.ranOk).length;
+      toast(d.success ? `任务池扩充完成：新增 ${r.created?.length || 0} 个任务（${okN} 个执行通过）` : (d.error || '任务池扩充失败'));
+    } catch (e) { toast('扩充失败：' + e.message); }
+    btn.textContent = '扩充任务池';
     refreshEvo();
   }
 
@@ -663,6 +678,7 @@
     // 3) 同一任务经多次返修会产生多条中间回答，只保留最终一条（用户只要最终回答）
     const userView = s => String(s||'')
       .split('\n\n[框架预取·相关记忆]')[0]
+      .split('\n\n[框架预取·相关教训]')[0]
       .split('\n\n[已上传文档]')[0];
     const isFramework = s => /^\s*\[(交付核验|框架提示|框架预取)/.test(String(s||''));
     const pairs = []; // 时间倒序构造 {user, answer}

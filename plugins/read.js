@@ -80,7 +80,20 @@ module.exports = {
         throw new Error(`skill: 路径未命中：${input}。可用技能：${known.join('、') || '（无）'}；先 skill.list() 查看，或检查技能内相对路径拼写`);
       }
     } else {
-      fp = path.resolve(ctx.cwd, input);
+      // 工作区路径沙箱（与 write.js 逐字对齐）：进程根/工程根路径重定向回工作区，外部路径拒绝
+      const __safeResolve = (cwd, p) => {
+        const fp = path.resolve(cwd, String(p || ''));
+        if (fp === cwd || fp.startsWith(cwd + path.sep)) return fp;
+        const rel = path.relative(cwd, fp);
+        for (const root of [path.resolve(cwd, '../..'), process.cwd()]) {
+          if ((rel.startsWith('..' + path.sep) || path.isAbsolute(rel))) {
+            const r = path.relative(root, fp);
+            if (r && !r.startsWith('..') && !path.isAbsolute(r)) return path.join(cwd, r);
+          }
+        }
+        throw new Error(`路径越界：${fp} 不在工作区 ${cwd} 内。请使用工作区内相对路径，或 ${cwd}/ 前缀的绝对路径`);
+      };
+      fp = __safeResolve(ctx.cwd, input);
     }
     // 软失败一律 throw：框架据此标记失败并计入评审统计（返回字符串会被误读为成功）
     if (!fs.existsSync(fp)) throw new Error(`文件不存在：${fp}`);

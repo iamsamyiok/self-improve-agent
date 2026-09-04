@@ -637,8 +637,16 @@ async function handleInnerChat(req, res, preBody, fromQueue) {
       let finalMsg = message;
       const multiStep = isMultiStepTask(message);
       if (multiStep) {
-        finalMsg = message + '\n\n[框架提示] 本任务为多步任务，两项纪律：\n1) 开始执行前必须先用 todo 建任务清单（每个步骤一条 todo.add），每完成一步立即 todo.toggle(id=...)，全部完成时清单应全为 [x]。\n2) 收尾前必须用 verify 插件断言每个产出文件（exists + contains 内容特征 + line_count），看到 FAIL 先修复再重验，全 PASS 才能总结。';
-        send({ type: 'info', text: '检测到多步任务，已注入任务清单+产出验证提醒' });
+        // 黑板骨架框架预创建（与 core.js 逐字对齐）：等模型自觉创建门槛太高，框架先建好
+        // 目标骨架，模型只需持续更新内容；blackboardNote 因此从第一轮起就有内容可注入
+        try {
+          const bb = path.join(WS_DIR, 'task-state.md');
+          // 新多步任务开始即重写黑板（覆盖上一任务的残留状态，防串任务）
+          fs.writeFileSync(bb, `# 任务黑板\n\n## 目标\n${String(message).slice(0, 500)}\n\n## 状态\n- [ ] 待更新（执行中每完成一步必须更新本文件）\n\n## 关键发现\n（执行中记录）\n`, 'utf8');
+          send({ type: 'info', text: '已创建任务黑板 task-state.md' });
+        } catch { /* 黑板预创建失败不影响任务 */ }
+        finalMsg = message + '\n\n[框架提示] 本任务为多步任务，三项纪律：\n1) 开始执行前必须先用 todo 建任务清单（每个步骤一条 todo.add），每完成一步立即 todo.toggle(id=...)，全部完成时清单应全为 [x]。\n2) 收尾前必须用 verify 插件断言每个产出文件（exists + contains 内容特征 + line_count），看到 FAIL 先修复再重验，全 PASS 才能总结。\n3) 黑板纪律：框架已在 ' + WS_DIR + '/task-state.md 创建黑板文件（含任务目标），执行中每完成一个步骤必须立即用 write/edit（或 bash 写入同一绝对路径）更新它（勾改状态、记录产出文件路径与关键发现）；框架每轮会把黑板内容注记给你——上下文被折叠后以黑板为准，先看黑板再行动。注意：黑板绝对路径是 ' + WS_DIR + '/task-state.md，禁止写到其他目录。';
+        send({ type: 'info', text: '检测到多步任务，已注入任务清单+产出验证+黑板提醒' });
       }
       // 长文创作任务（v0.9.17 病根：模型以"万字超单次输出限制"为由直接拒绝——
       // 它没想到分章分段 write 工具流可以完成；自动续航 72 轮预算 + append 分段
@@ -714,6 +722,12 @@ async function handleInnerChat(req, res, preBody, fromQueue) {
       send({ type: 'info', text: '已预取相关记忆与历史任务注入上下文' });
     }
   } catch { /* 预取失败不影响任务 */ }
+  // 教训卡注入（缺口经验运行时化）：与 core.js 同步对齐——历史任务核验 FAIL 的教训按
+  // 任务相似度检索注入，零门槛即时生效，无需等待 A/B 实验晋级
+  try {
+    const lessonSec = require('./lib/evolution').lessonsPromptSection(message, 3);
+    if (lessonSec) { finalMsg += lessonSec; send({ type: 'info', text: '已注入相关教训卡' }); }
+  } catch { /* 教训检索失败不影响任务 */ }
   innerMessages.push({ role: 'user', content: finalMsg });
  persistInnerMessages();
  // 事件处理器（主/子智能体共用）：过程落盘 + usage 落账 + SSE 透传（子事件带 sub 标记）
@@ -850,8 +864,18 @@ async function handleInnerChat(req, res, preBody, fromQueue) {
    if (done.length > recentDone.length) lines.push(`- （另有 ${done.length - recentDone.length} 项已完成略）`);
    return lines.join('\n');
  };
- // 自动续航判定（v0.9.12 P0-3）：清单存在且有未完成项 → 撞段上限时值得续航
- const shouldContinue = () => readTodo().some(t => !t.done);
+  // 自动续航判定（v0.9.12 P0-3）：清单存在且有未完成项 → 撞段上限时值得续航
+  const shouldContinue = () => readTodo().some(t => !t.done);
+  // 黑板模式（与 core.js 逐字对齐）：读取工作区 task-state.md 每轮注入发送副本——
+  // 上下文折叠后的浓缩权威状态源，截断 1500 字符控制注记预算
+  const readBlackboard = () => {
+    try { return fs.readFileSync(path.join(WS_DIR, 'task-state.md'), 'utf8').trim().slice(0, 1500); } catch { return ''; }
+  };
+  const blackboardNote = () => {
+    const s = readBlackboard();
+    if (!s) return '';
+    return '[任务黑板] 工作区 task-state.md 当前内容（权威状态源，执行中随时用 write/edit 更新：完成后勾改、新发现追加、计划变化修订）：\n' + s;
+  };
  // 里程碑记忆（v0.9.12 P1-4）：todo.toggle 把一项从待办变为完成时自动 memory.save
  // 进度摘要——长任务后段上下文被预算折叠时，早期决策依据可从记忆召回。
  // 病根：memory.save 全靠模型自觉，实测长任务后段"忘了自己为什么这么做"
@@ -893,6 +917,7 @@ async function handleInnerChat(req, res, preBody, fromQueue) {
     // 必为完整配对，模型看到尾部工具结果自然续跑，已完成步骤不重做
     const runInner = () => chatInner(cfg.inner, innerMessages, plugins.toolDefs(), callPluginWrapped, handleEvent, {
       todoNote,
+      blackboardNote,
       shouldContinue,
       intentNote,
       // 每轮落盘（v0.9.12 P0-2）：工具结果入列后立即持久化，崩溃/重启不丢进行中历史
@@ -921,6 +946,7 @@ async function handleInnerChat(req, res, preBody, fromQueue) {
     // 交付核验 + 自动返修（v0.9.24 解耦为插件）：对照意图契约核验（硬断言先行，语义缺口 judge 补），
     // 发现缺口注入返修指令重入执行，上限 2 轮（防完美主义死循环）
     let repairCount = 0, finalGaps = [];
+    const gapsSeen = []; // 全过程缺口（含已修复的中间轮）——教训卡的完整来源（与 core.js 对齐）
     if (hasActiveIntent()) {
       const intent = getCurrentIntent();
       const collectGaps = async () => {
@@ -944,8 +970,17 @@ async function handleInnerChat(req, res, preBody, fromQueue) {
                 gaps.push(`交付文件 JSON 格式错误：${d.path}`);
                 hardLines.push(`${d.path}：FAIL - JSON 格式无效`);
               }
-            }
-          }
+             }
+           }
+         }
+        // 黑板联动核验（黑板模式收口）：多步任务交付核验时断言黑板已更新——
+        // 仍是初始骨架（待更新/无完成标记）即视为缺口，返修指令会要求补记。
+        // 没有这层，简单任务模型会跳过黑板更新，折叠保护形同虚设。
+        if (multiStep) {
+          try {
+            const bb = fs.readFileSync(path.join(WS_DIR, 'task-state.md'), 'utf8');
+            if (bb.includes('待更新') && !bb.includes('- [x]')) gaps.push('任务黑板 task-state.md 仍是初始骨架未记录执行状态，必须补记：已完成步骤、各产出文件路径与关键发现');
+          } catch { gaps.push('任务黑板 task-state.md 丢失，必须重建并补记执行状态'); }
         }
         // LLM judge：核验语义覆盖
         if (!gaps.length) {
@@ -966,6 +1001,7 @@ async function handleInnerChat(req, res, preBody, fromQueue) {
       const MAX_REPAIR = 2;
       for (let r = 0; ; r++) {
         const gaps = await collectGaps();
+        for (const g of gaps) { const s = String(g).slice(0, 300); if (!gapsSeen.includes(s)) gapsSeen.push(s); }
         appendProcess(`\n### ${fmtClock(Date.now())} ✅ 交付核验（第 ${r + 1} 次）\n\n${gaps.length ? gaps.map((g, i) => `${i + 1}. ${g}`).join('\n') : 'PASS：意图契约全部条款满足'}\n`);
         if (!gaps.length) {
           send({ type: 'info', text: '[交付核验] PASS：交付满足意图契约全部条款' });
@@ -1000,7 +1036,7 @@ async function handleInnerChat(req, res, preBody, fromQueue) {
         const intent = getCurrentIntent();
         if (!hasUnresolvedGaps) {
           // 返修后最终 PASS 的任务是最有价值的难例：repairs>0 会被标记 hard，进化时优先重放
-          evolution.recordBenchmark({ task: message, finalText: lastAnswer, ws: currentWorkspace(), intent, artifacts: evolution.artifactManifest(WS_DIR), repairs: repairCount, lastGaps: [] });
+          evolution.recordBenchmark({ task: message, finalText: lastAnswer, ws: currentWorkspace(), intent, artifacts: evolution.artifactManifest(WS_DIR), repairs: repairCount, lastGaps: [], allGaps: gapsSeen.slice(0, 8) });
         } else {
           // 上限仍未过的任务可能本身不可完成，不入 benchmark（避免不可达任务压扁 A/B），
           // 但缺口原文进经验池，供 Meta-Agent 提炼 skill mutation 时参考
@@ -1462,6 +1498,16 @@ const server = http.createServer(async (req, res) => {
       if (process.env.DUAL_AGENT_EVOLUTION_RUNNING === '1') { json(res,409,{success:false,error:'Evolution 正在运行'}); return; }
       process.env.DUAL_AGENT_EVOLUTION_RUNNING='1';
       try { const r=await evo.runEvolution({cases:Number(body.cases)||12,promote:!!body.promote}); json(res,200,{success:!!r.ok,result:r}); }
+      catch(e){ json(res,500,{success:false,error:String(e.message||e)}); }
+      finally { delete process.env.DUAL_AGENT_EVOLUTION_RUNNING; }
+      return;
+    }
+    if (p === '/api/evolution/grow-pool' && req.method === 'POST') {
+      const body = await readBody(req);
+      const evo = require('./lib/evolution');
+      if (process.env.DUAL_AGENT_EVOLUTION_RUNNING === '1') { json(res,409,{success:false,error:'Evolution 正在运行'}); return; }
+      process.env.DUAL_AGENT_EVOLUTION_RUNNING='1';
+      try { const r=await evo.growPool({count:Number(body.count)||3}); json(res,200,{success:!!r.ok,result:r}); }
       catch(e){ json(res,500,{success:false,error:String(e.message||e)}); }
       finally { delete process.env.DUAL_AGENT_EVOLUTION_RUNNING; }
       return;

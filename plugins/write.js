@@ -35,6 +35,20 @@ module.exports = {
     required: ['path', 'content']
   },
   run: async (args, ctx) => {
+    // 工作区路径沙箱：模型常把进程根（/workspace）当工作区根，产出写到工程目录外。
+    // 统一收敛：工作区内放行；进程根/工程根下的路径剥前缀重定向回工作区；外部路径拒绝。
+    const __safeResolve = (cwd, p) => {
+      const fp = path.resolve(cwd, String(p || ''));
+      if (fp === cwd || fp.startsWith(cwd + path.sep)) return fp;
+      const rel = path.relative(cwd, fp);
+      for (const root of [path.resolve(cwd, '../..'), process.cwd()]) {
+        if ((rel.startsWith('..' + path.sep) || path.isAbsolute(rel))) {
+          const r = path.relative(root, fp);
+          if (r && !r.startsWith('..') && !path.isAbsolute(r)) return path.join(cwd, r);
+        }
+      }
+      throw new Error(`路径越界：${fp} 不在工作区 ${cwd} 内。请使用工作区内相对路径，或 ${cwd}/ 前缀的绝对路径`);
+    };
     // P0 修复：路径标准化——如果输入路径已包含工作区前缀，自动去除避免双重嵌套
     let userPath = String(args.path || '');
     if (ctx.cwd && userPath.startsWith(ctx.cwd)) {
@@ -44,7 +58,7 @@ module.exports = {
         userPath = userPath.slice(1);
       }
     }
-    const fp = path.resolve(ctx.cwd, userPath);
+    const fp = __safeResolve(ctx.cwd, userPath);
     // 软失败一律 throw：框架据此标记失败并计入评审统计
     if (fs.existsSync(fp) && fs.statSync(fp).isDirectory()) {
       throw new Error(`${fp} 是目录，请提供完整文件路径（需包含文件名，如 game.html）`);

@@ -1500,6 +1500,19 @@ async function main() {
     assert.ok(html.includes('pairs.push({ user: userView(m.content), answer: lastAnswer })'), '必须按任务归组保留最终回答');
   });
 
+  await t('静态防回归：黑板模式三件套（多步纪律含黑板要求 + blackboardNote 每轮注入 + 双路径对齐）', () => {
+    const coreSrc = fs.readFileSync(path.join(ROOT, 'hwj', 'core.js'), 'utf8');
+    const serverSrc = fs.readFileSync(path.join(ROOT, 'server.js'), 'utf8');
+    const innerSrc = fs.readFileSync(path.join(ROOT, 'lib', 'inner.js'), 'utf8');
+    for (const [name, src] of [['core.js', coreSrc], ['server.js', serverSrc]]) {
+      assert.ok(src.includes('task-state.md'), `${name} 必须读写黑板文件 task-state.md`);
+      assert.ok(src.includes('blackboardNote'), `${name} 必须定义并透传 blackboardNote`);
+      assert.ok(src.includes('三项纪律') && src.includes('黑板纪律'), `${name} 多步纪律必须包含黑板要求`);
+      assert.ok(src.includes('slice(0, 1500)'), `${name} 黑板注记必须截断预算`);
+    }
+    assert.ok(innerSrc.includes('opts.blackboardNote'), 'inner.js 必须支持 blackboardNote 注记通道');
+  });
+
   await t('spawnSub 参数链静态防回归（v0.9.7 压测教训：拆函数断参 ReferenceError）', () => {
     const src = fs.readFileSync(path.join(ROOT, 'server.js'), 'utf8');
     const defs = [...src.matchAll(/runSubOnce = async \(picked([^)]*)\)/g)];

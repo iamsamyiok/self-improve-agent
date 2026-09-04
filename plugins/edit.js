@@ -16,6 +16,19 @@ module.exports = {
     required: ['path', 'oldText', 'newText']
   },
   run: async (args, ctx) => {
+    // 工作区路径沙箱（与 write.js 逐字对齐）：进程根/工程根路径重定向回工作区，外部路径拒绝
+    const __safeResolve = (cwd, p) => {
+      const fp = path.resolve(cwd, String(p || ''));
+      if (fp === cwd || fp.startsWith(cwd + path.sep)) return fp;
+      const rel = path.relative(cwd, fp);
+      for (const root of [path.resolve(cwd, '../..'), process.cwd()]) {
+        if ((rel.startsWith('..' + path.sep) || path.isAbsolute(rel))) {
+          const r = path.relative(root, fp);
+          if (r && !r.startsWith('..') && !path.isAbsolute(r)) return path.join(cwd, r);
+        }
+      }
+      throw new Error(`路径越界：${fp} 不在工作区 ${cwd} 内。请使用工作区内相对路径，或 ${cwd}/ 前缀的绝对路径`);
+    };
     // P0 修复：路径标准化
     let userPath = String(args.path || '');
     if (ctx.cwd && userPath.startsWith(ctx.cwd)) {
@@ -24,7 +37,7 @@ module.exports = {
         userPath = userPath.slice(1);
       }
     }
-    const fp = path.resolve(ctx.cwd, userPath);
+    const fp = __safeResolve(ctx.cwd, userPath);
     const src = fs.readFileSync(fp, 'utf8');
     const oldText = String(args.oldText ?? '');
     const newText = String(args.newText ?? '');

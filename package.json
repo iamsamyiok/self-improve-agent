@@ -1,6 +1,6 @@
 {
   "name": "hwj-agent",
-  "version": "3.0.1",
+  "version": "3.1.0",
   "description": "HWJ Agent — Inner Agent 工作台 + 后台 Self-Improving Agent Loop + 用户中心进化史",
   "main": "index.js",
   "bin": {
