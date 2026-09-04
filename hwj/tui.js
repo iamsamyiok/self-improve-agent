@@ -20,14 +20,14 @@ function charWidth(cp) {
 }
 function strWidth(s) {
   let w = 0;
-  for (const ch of String(s ?? '')) w += charWidth(ch.codePointAt(0));
+  for (const ch of String(s == null ? '' : s)) w += charWidth(ch.codePointAt(0));
   return w;
 }
 // 按显示宽度硬折行（CJK 字符不拆半，宽度不够时整字符下移）
 function wrapText(text, width) {
   const out = [];
-  if (width < 2) return [String(text ?? '')];
-  for (const rawLine of String(text ?? '').split('\n')) {
+  if (width < 2) return [String(text == null ? '' : text)];
+  for (const rawLine of String(text == null ? '' : text).split('\n')) {
     if (!rawLine) { out.push(''); continue; }
     let cur = '', curW = 0;
     for (const ch of rawLine) {
@@ -41,7 +41,7 @@ function wrapText(text, width) {
 }
 // 按显示宽度截断加省略号（超长单行摘要用）
 function ellipsis(s, max) {
-  const str = String(s ?? '');
+  const str = String(s == null ? '' : s);
   if (max <= 1) return '…';
   if (strWidth(str) <= max) return str;
   let keep = '', w = 0;
@@ -73,7 +73,7 @@ function summarizeArgs(args) {
   if (!args || typeof args !== 'object') return '';
   const flat = {};
   for (const [k, v] of Object.entries(args)) flat[k] = typeof v === 'string' ? v.replace(/\s+/g, ' ').slice(0, 80) : v;
-  const pick = flat.path ?? flat.command ?? flat.query ?? flat.url ?? flat.name ?? flat.action ?? '';
+  const pick = flat.path || flat.command || flat.query || flat.url || flat.name || flat.action || '';
   const rest = Object.keys(flat).filter(k => k !== 'path' && k !== 'command' && k !== 'query' && k !== 'url' && k !== 'name' && k !== 'action');
   let s = String(pick);
   if (rest.length && strWidth(s) < 40) s += ` ${rest.slice(0, 2).map(k => `${k}=${ellipsis(String(flat[k]), 20)}`).join(' ')}`;
@@ -178,8 +178,8 @@ function createTui(opts = {}) {
     });
   }
   function printAssistant(text) {
-    if (plain) { printRaw(String(text ?? '')); return; }
-    const lines = wrapText(String(text ?? ''), Math.max(10, termWidth() - 4));
+    if (plain) { printRaw(String(text == null ? '' : text)); return; }
+    const lines = wrapText(String(text == null ? '' : text), Math.max(10, termWidth() - 4));
     settlePrint(() => {
       printRaw('');
       printRaw(A.green('hwj ') + lines[0]);
@@ -188,17 +188,17 @@ function createTui(opts = {}) {
     });
   }
   function printInfo(text) {
-    if (!String(text ?? '').trim()) return; // 空事件不打印（空白行根因：框架偶发发空 info）
+    if (!String(text == null ? '' : text).trim()) return; // 空事件不打印（空白行根因：框架偶发发空 info）
     if (plain) { printRaw(`[info] ${text}`); return; }
     settlePrint(() => { for (const l of wrapText(text, termWidth() - 2)) printRaw(A.dim(' · ' + l)); });
   }
   function printError(text) {
-    if (!String(text ?? '').trim()) return;
+    if (!String(text == null ? '' : text).trim()) return;
     if (plain) { printRaw(`[错误] ${text}`); return; }
     settlePrint(() => { for (const l of wrapText(text, termWidth() - 2)) printRaw(A.red('✗ ' + l)); });
   }
   function printPlain(text) {
-    if (!String(text ?? '').trim()) return;
+    if (!String(text == null ? '' : text).trim()) return;
     settlePrint(() => printRaw(plain ? text : A.gray(text)));
   }
 
@@ -276,7 +276,7 @@ function createTui(opts = {}) {
   function settleOverflow() {
     if (plain) return;
     let spilled = null;
-    while (st.tools.length > REGION_TOOLS_MAX && st.tools[0].done) (spilled ||= []).push(st.tools.shift());
+    while (st.tools.length > REGION_TOOLS_MAX && st.tools[0].done) { if (!spilled) spilled = []; spilled.push(st.tools.shift()); }
     if (spilled) settlePrint(() => { for (const t of spilled) printSettledTool(t); });
   }
 
@@ -308,7 +308,7 @@ function createTui(opts = {}) {
       if (t.plugin === ev.plugin && !t.done) {
         t.done = true; t.ok = !!ev.ok; t.ms = ev.ms || (Date.now() - t.t0); t.result = ev.result;
         toolSeq += 1;
-        toolHist.push({ seq: toolSeq, plugin: t.plugin, args: t.args, ok: t.ok, ms: t.ms, sub: t.sub, result: String(ev.result ?? '') });
+        toolHist.push({ seq: toolSeq, plugin: t.plugin, args: t.args, ok: t.ok, ms: t.ms, sub: t.sub, result: String(ev.result == null ? '' : ev.result) });
         if (toolHist.length > 40) toolHist.shift();
         break;
       }
@@ -374,7 +374,7 @@ function createTui(opts = {}) {
     if (rl) { rl.close(); rl = null; }
   }
   function recentTools() { return toolHist.map(t => ({ ...t, args: safeClone(t.args) })); }
-  function safeClone(a) { try { return JSON.parse(JSON.stringify(a ?? null)); } catch { return { ...String(a) }; } }
+  function safeClone(a) { try { return JSON.parse(JSON.stringify(a == null ? null : a)); } catch { return { ...String(a) }; } }
 
   return { printUser, printAssistant, printInfo, printError, printPlain, beginTask, endTask, setReply, toolCall, toolResult, usage, setMeta, start, setHandlers, refreshPrompt, clearPromptLine, close, recentTools, state: st };
 }

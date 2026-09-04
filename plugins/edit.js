@@ -39,8 +39,8 @@ module.exports = {
     }
     const fp = __safeResolve(ctx.cwd, userPath);
     const src = fs.readFileSync(fp, 'utf8');
-    const oldText = String(args.oldText ?? '');
-    const newText = String(args.newText ?? '');
+    const oldText = String(args.oldText == null ? '' : args.oldText);
+    const newText = String(args.newText == null ? '' : args.newText);
     const occ = args.occurrence === undefined ? 1 : Number(args.occurrence);
     
     // 收集全部匹配位置
@@ -59,7 +59,7 @@ module.exports = {
         `请先用 read 重新读取文件，从返回内容中逐字符精确复制 oldText（注意空格缩进与转义），再重试。`);
     }
     
-    const idx = occ === -1 ? hits[hits.length - 1] : (hits[Math.max(0, occ - 1)] ?? hits[0]);
+    const idx = occ === -1 ? hits[hits.length - 1] : (hits[Math.max(0, occ - 1)] != null ? hits[Math.max(0, occ - 1)] : hits[0]);
     const nth = hits.indexOf(idx) + 1;
     const out = src.slice(0, idx) + newText + src.slice(idx + oldText.length);
     fs.writeFileSync(fp, out, 'utf8');

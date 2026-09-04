@@ -226,7 +226,7 @@ function xlsxTextExtract(buf) {
         const vm = /<v>([\s\S]*?)<\/v>/.exec(body);
         const tm = /<t(?:\s[^>]*)?>([\s\S]*?)<\/t>/.exec(body);
         let cell = '';
-        if (isShared && vm) cell = shared[Number(vm[1])] ?? '';
+        if (isShared && vm) cell = shared[Number(vm[1])] == null ? '' : shared[Number(vm[1])];
         else if (vm) cell = xmlDecodeEntities(vm[1]);
         else if (tm) cell = xmlDecodeEntities(tm[1]);
         line.push(cell);

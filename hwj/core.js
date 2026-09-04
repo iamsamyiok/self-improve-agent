@@ -114,7 +114,7 @@ function appendInnerLog(entry) {
 // 面向用户的最终回复兜底：当模型把整段回复输出成原始 JSON/代码围栏包裹的 JSON 时，
 // 提取可读字段组织成自然语言；无法提取时给出通用说明。只处理"整体就是 JSON"的极端情况。
 function humanizeAnswer(text) {
-  let s = String(text ?? '').trim();
+  let s = String(text == null ? '' : text).trim();
   if (!s) return s;
   // 剥掉 ```json ... ``` 围栏
   const fence = s.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);

@@ -26,8 +26,8 @@ function quietUi() {
   return {
     printUser() {}, beginTask() {}, endTask() {}, setReply() {}, toolCall() {}, toolResult() {},
     usage() {}, setMeta() {}, printInfo() {}, printPlain() {}, close() {},
-    printAssistant: t => process.stdout.write(String(t ?? '') + '\n'),
-    printError: t => process.stderr.write(String(t ?? '') + '\n')
+    printAssistant: t => process.stdout.write(String(t == null ? '' : t) + '\n'),
+    printError: t => process.stderr.write(String(t == null ? '' : t) + '\n')
   };
 }
 

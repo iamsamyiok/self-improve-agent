@@ -24,6 +24,15 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // 全局崩溃留痕：任何线程未捕获异常先写入 node-log.txt 再交给系统处理，
+        // 避免"无声闪崩"（用户可截图日志反馈，开发者可定位）
+        val upstream = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { t, e ->
+            try {
+                NodeRuntime.log(this, "未捕获崩溃(${t.name}): ${e.stackTraceToString().take(3500)}")
+            } catch (_: Exception) { }
+            upstream?.uncaughtException(t, e)
+        }
         setContentView(R.layout.activity_main)
         splash = findViewById(R.id.splash)
         web = findViewById(R.id.web)
@@ -83,10 +92,12 @@ class MainActivity : AppCompatActivity() {
             Thread { shareDownloaded(url, mime) }.start()
         })
 
-        // 就绪后加载页面（轮询回调主线程）
+        // 就绪后加载页面（轮询回调主线程）；线程级兜底防中断异常闪崩
         Thread {
-            val deadline = System.currentTimeMillis() + 40_000
-            while (System.currentTimeMillis() < deadline && !NodeRuntime.ready) Thread.sleep(300)
+            try {
+                val deadline = System.currentTimeMillis() + 40_000
+                while (System.currentTimeMillis() < deadline && !NodeRuntime.ready) Thread.sleep(300)
+            } catch (_: InterruptedException) { /* 服务异常中断：按未就绪走失败页 */ }
             runOnUiThread {
                 splash.visibility = View.GONE // 无论成败都撤掉启动页（否则失败信息被遮住）
                 if (NodeRuntime.ready) {

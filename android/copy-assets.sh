@@ -13,7 +13,7 @@ echo "[copy-assets] dual-agent -> assets（files 白名单同 npm 包）"
 mkdir -p "$ASSETS" "$NATIVE" "$CPPN"
 cd "$ROOT"
 
-# npm files 白名单同步（与 package.json 保持一致：入口/核心/插件/前端/文档）
+# npm files 白名单同步（与 package.json 保持一致：入口/核心/插件/前端/技能库/文档）
 rsync -a --delete \
   --include='server.js' --include='mobile-main.js' --include='package.json' --include='LICENSE' --include='README.md' \
   --include='lib/' --include='lib/**' \
@@ -21,6 +21,7 @@ rsync -a --delete \
   --include='plugins/' --include='plugins/**' \
   --include='public/' --include='public/**' \
   --include='tools/' --include='tools/**' \
+  --include='skills/' --include='skills/**' \
   --exclude='*' \
   ./ "$ASSETS/"
 

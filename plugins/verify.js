@@ -100,12 +100,12 @@ module.exports = {
             detail = exists ? '文件存在' : '文件不存在';
             break;
           case 'contains':
-            ok = exists && content.includes(String(r.text ?? ''));
-            detail = `应包含 ${JSON.stringify(String(r.text ?? '').slice(0, 60))}`;
+            ok = exists && content.includes(String(r.text == null ? '' : r.text));
+            detail = `应包含 ${JSON.stringify(String(r.text == null ? '' : r.text).slice(0, 60))}`;
             break;
           case 'not_contains':
-            ok = !exists || !content.includes(String(r.text ?? ''));
-            detail = `不应包含 ${JSON.stringify(String(r.text ?? '').slice(0, 60))}`;
+            ok = !exists || !content.includes(String(r.text == null ? '' : r.text));
+            detail = `不应包含 ${JSON.stringify(String(r.text == null ? '' : r.text).slice(0, 60))}`;
             break;
           case 'regex': {
             if (!r.pattern) { detail = 'pattern 缺失'; break; }
@@ -124,7 +124,7 @@ module.exports = {
               const lo = r.min !== undefined ? lineCount >= r.min : true;
               const hi = r.max !== undefined ? lineCount <= r.max : true;
               ok = lo && hi;
-              detail = `要求 [${r.min ?? 0}, ${r.max ?? '∞'}]，实际 ${lineCount}`;
+              detail = `要求 [${r.min == null ? 0 : r.min}, ${r.max == null ? '∞' : r.max}]，实际 ${lineCount}`;
             } else { detail = 'exact/min/max 至少一个'; }
             break;
           }

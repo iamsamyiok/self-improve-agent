@@ -4,5 +4,16 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <path android:fillColor="#FF4F2E9E" android:pathData="M0,0h108v108h-108z" />
+    <!-- 与 Web 品牌一致的紫蓝渐变（左上 #6366F1 → 右下 #8B5CF6） -->
+    <path android:pathData="M0,0h108v108h-108z">
+        <aapt:attr xmlns:aapt="http://schemas.android.com/aapt" name="android:fillColor">
+            <gradient
+                android:startX="0" android:startY="0"
+                android:endX="108" android:endY="108"
+                android:type="linear">
+                <item android:color="#FF6366F1" android:offset="0.0" />
+                <item android:color="#FF8B5CF6" android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+    </path>
 </vector>

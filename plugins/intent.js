@@ -32,7 +32,7 @@ async function callLLMText(cfg, msgs, opts = {}) {
     throw new Error(`意图/核验 API ${resp.status}：${txt.slice(0, 200) || '无响应体'}`);
   }
   const data = await resp.json();
-  return data.choices?.[0]?.message?.content || '';
+  return (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) || '';
 }
 
 // 插件状态存储

@@ -133,7 +133,7 @@ module.exports = {
         const withHint = (s) => hint ? `${s}\n[Android 环境提示] ${hint}` : s;
         if (err && err.killed) resolve(withHint(`命令超时被终止（${timeout/1000} 秒）。部分输出：\n${tail}`));
         else if (err && err.code === 127) resolve(withHint(`命令未找到（127）。输出：\n${tail || '（无输出）'}`));
-        else if (err) resolve(withHint(`命令退出码 ${err.code ?? '?'}。输出：\n${tail || '（无输出）'}`));
+        else if (err) resolve(withHint(`命令退出码 ${err.code == null ? '?' : err.code}。输出：\n${tail || '（无输出）'}`));
         // 重定向无输出命令：返回确认提示
         else if (!tail && /(>>|>|tee)\s+\S+/.test(cmd)) {
           resolve(withHint(`命令执行成功（退出码 0），无终端输出（内容可能已重定向到文件）。如需确认追加/写入是否生效：wc -c <文件> 或 ls -l <文件>`));

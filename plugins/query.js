@@ -34,7 +34,7 @@ function queryCsv(text, sqlLike) {
   const rows = lines.slice(1).map(l => {
     const cells = l.split(',').map(c => c.trim());
     const row = {};
-    header.forEach((h, i) => { row[h] = cells[i] ?? ''; });
+    header.forEach((h, i) => { row[h] = cells[i] == null ? '' : cells[i]; });
     return row;
   });
   const m = String(sqlLike || '').trim().match(/^select\s+(.+?)(?:\s+where\s+(.+))?$/i);
@@ -69,8 +69,8 @@ function queryCsv(text, sqlLike) {
 }
 
 function fmtTable(header, rows, maxRows = 50) {
-  const widths = header.map(h => Math.max(String(h).length, ...rows.slice(0, maxRows).map(r => String(r[h] ?? '').length)));
-  const line = (cells) => cells.map((c, i) => String(c ?? '').padEnd(widths[i])).join(' | ');
+  const widths = header.map(h => Math.max(String(h).length, ...rows.slice(0, maxRows).map(r => String(r[h] == null ? '' : r[h]).length)));
+  const line = (cells) => cells.map((c, i) => String(c == null ? '' : c).padEnd(widths[i])).join(' | ');
   const out = [line(header), widths.map(w => '-'.repeat(w)).join('-+-')];
   rows.slice(0, maxRows).forEach(r => out.push(line(header.map(h => r[h]))));
   if (rows.length > maxRows) out.push(`…另有 ${rows.length - maxRows} 行未展示`);

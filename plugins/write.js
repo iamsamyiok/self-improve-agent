@@ -63,7 +63,7 @@ module.exports = {
     if (fs.existsSync(fp) && fs.statSync(fp).isDirectory()) {
       throw new Error(`${fp} 是目录，请提供完整文件路径（需包含文件名，如 game.html）`);
     }
-    const body = String(args.content ?? '');
+    const body = String(args.content == null ? '' : args.content);
     fs.mkdirSync(path.dirname(fp), { recursive: true });
 
     if (args.append === true) {

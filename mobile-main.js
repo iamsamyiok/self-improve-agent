@@ -1,5 +1,10 @@
 // Android 壳入口：由 nodejs-mobile 以 "node mobile-main.js <dataDir>" 方式启动
 // 数据目录由 Kotlin 侧通过 argv[2] 传入（App 私有目录），所有状态隔离在其中
+//
+// 首要动作：Node 12 兼容层（fetch/rmSync/cpSync/AbortController + 语法兼容由源码保证）。
+// 必须在任何业务 require 之前安装，详见 lib/node12-compat.js 头注。
+require('./lib/node12-compat').install();
+
 const path = require('path');
 const fs = require('fs');
 
@@ -37,4 +42,5 @@ const termux = '/data/data/com.termux/files/usr/bin';
 process.env.PATH = [termux, '/system/bin', '/system/xbin'].filter(p => fs.existsSync(p)).join(':');
 
 console.log(`[mobile-main] data=${dataDir} port=${process.env.PORT} path=${process.env.PATH}`);
+console.log(`[mobile-main] node=${process.version} polyfill: fetch=${typeof fetch} rmSync=${typeof fs.rmSync} cpSync=${typeof fs.cpSync} AbortController=${typeof AbortController}`);
 require('./server.js');

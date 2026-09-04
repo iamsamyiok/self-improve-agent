@@ -25,7 +25,13 @@ class NodeService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        startForeground(1, buildNotification("启动中…"))
+        // Android 14 (API 34)+ 要求 startForeground 显式指定类型；specialUse 无时长限制
+        // （dataSync 在 Android 15 有 6 小时硬上限，长期驻留的 Agent 服务会被系统掐掉）
+        if (Build.VERSION.SDK_INT >= 34) {
+            startForeground(1, buildNotification("启动中…"), android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+        } else {
+            startForeground(1, buildNotification("启动中…"))
+        }
         NodeRuntime.start(this)
         running = true
         schedExecutor.execute {

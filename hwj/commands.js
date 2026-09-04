@@ -166,7 +166,7 @@ async function runCommand(line, ctx) {
         try { argsStr = JSON.stringify(it.args); } catch { argsStr = String(it.args); }
         ui.printPlain(`参数：${argsStr}`);
         ui.printPlain('结果：');
-        const rows = String(it.result ?? '').split('\n').filter(l => l.trim());
+        const rows = String(it.result == null ? '' : it.result).split('\n').filter(l => l.trim());
         for (const l of rows.slice(0, 20)) ui.printPlain(`  ${l.length > 160 ? l.slice(0, 160) + '…' : l}`);
         if (rows.length > 20) ui.printPlain(`  …（共 ${rows.length} 行，完整内容见 process.md）`);
         return 'handled';

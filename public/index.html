@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<meta name="theme-color" content="#ffffff">
 <title>HWJ Agent · 自进化工作区</title>
+<link rel="icon" href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40"><rect x="1" y="1" width="38" height="38" rx="9" fill="%236366F1"/><path d="M20 9.5c-5.8 0-10.5 3.8-10.5 8.4 0 2.6 1.5 5 3.8 6.5-.2 1.6-1 3.1-2.3 4.3 2.4-.2 4.5-1.1 6.1-2.4 1 .2 1.9.3 2.9.3 5.8 0 10.5-3.8 10.5-8.4S25.8 9.5 20 9.5z" fill="white"/><path d="M15.6 18.4h8.8m0 0-2.6-2.6m2.6 2.6-2.6 2.6m-6.2-.4h8.8m0 0-2.6-2.6m2.6 2.6-2.6 2.6" stroke="%236366F1" stroke-width="1.7" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>'>
 <style>
   :root {
     --green: #10a37f; --green-dark: #0e9069; --green-light: #e7f6f1;
@@ -202,12 +202,38 @@
   @media (min-width: 1400px) {
     .chat-inner, .composer, .composer-hint, #welcome { max-width:820px; }
   }
+
+  /* ---------- 设置按钮与配置弹窗 ---------- */
+  .hd-gear { display:flex; align-items:center; justify-content:center; width:34px; height:34px; border:none; background:none; color:var(--text-2,#8A94A3); cursor:pointer; border-radius:9px; }
+  .hd-gear:hover { background:var(--hover,#1D232B); color:var(--text,#E8EDF2); }
+  #setupMask { position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:70; display:none; }
+  #setupMask.show { display:block; }
+  #setupCard { position:fixed; z-index:71; left:50%; top:10%; transform:translateX(-50%); width:min(430px, calc(100vw - 28px)); max-height:78vh; overflow:auto; background:var(--side,#171C22); border:1px solid var(--border,#262C33); border-radius:16px; padding:18px 18px 14px; display:none; box-shadow:0 18px 60px rgba(0,0,0,.4); }
+  #setupCard.show { display:block; }
+  .su-head { display:flex; align-items:center; gap:8px; margin-bottom:14px; }
+  .su-head b { font-size:15px; }
+  .su-head .ed-close { margin-left:auto; }
+  .su-label { display:block; font-size:12.5px; color:var(--text-3,#8A94A3); margin:10px 0 4px; }
+  .su-label input { width:100%; margin-top:5px; background:var(--bg,#101418); border:1px solid var(--border,#262C33); color:var(--text,#E8EDF2); border-radius:9px; padding:10px 12px; font-size:16px; outline:none; }
+  .su-label input:focus { border-color:var(--acc,#6366F1); }
+  .su-row { display:flex; gap:9px; margin-top:16px; }
+  .su-btn { flex:1; border:none; border-radius:10px; padding:11px 0; font-size:14px; font-weight:600; cursor:pointer; }
+  .su-btn.ghost { background:transparent; border:1px solid var(--border,#262C33); color:var(--text-2,#8A94A3); }
+  .su-btn.main { background:linear-gradient(135deg,#6366F1,#8B5CF6); color:#fff; }
+  #setupMsg { min-height:18px; font-size:12.5px; margin-top:9px; color:var(--green,#34D399); white-space:pre-wrap; word-break:break-all; }
+  #setupMsg.err { color:#F87171; }
+  .su-tip { font-size:11.5px; color:var(--text-3,#8A94A3); line-height:1.6; margin-top:8px; }
+  /* 手机：输入区避开底部手势条 */
+  @media (max-width: 860px) {
+    .composer-wrap { padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 10px); }
+    .hd-gear { width:38px; height:38px; }
+  }
 </style>
 </head>
 <body>
 <div id="app">
   <aside id="sidebar">
-    <div class="sb-brand"><div class="logo">HW</div><b>HWJ Agent</b><span class="ver">v3.1.0</span></div>
+    <div class="sb-brand"><svg class="logo" width="30" height="30" viewBox="0 0 40 40" aria-hidden="true"><defs><linearGradient id="lgBrand" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#6366F1"/><stop offset="1" stop-color="#8B5CF6"/></linearGradient></defs><rect x="1" y="1" width="38" height="38" rx="9" fill="url(#lgBrand)"/><path d="M20 9.5c-5.8 0-10.5 3.8-10.5 8.4 0 2.6 1.5 5 3.8 6.5-.2 1.6-1 3.1-2.3 4.3 2.4-.2 4.5-1.1 6.1-2.4 1 .2 1.9.3 2.9.3 5.8 0 10.5-3.8 10.5-8.4S25.8 9.5 20 9.5z" fill="#fff"/><path d="M15.6 18.4h8.8m0 0-2.6-2.6m2.6 2.6-2.6 2.6m-6.2-.4h8.8m0 0-2.6-2.6m2.6 2.6-2.6 2.6" stroke="#6366F1" stroke-width="1.7" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg><b>HWJ Agent</b><span class="ver">v3.1.0</span></div>
     <button class="sb-new" onclick="newChat()">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
       新对话
@@ -251,6 +277,9 @@
       <div class="hd-title"><b>HWJ Agent</b><span>自进化运行时 · 任务即证据</span></div>
       <div class="grow"></div>
       <span class="tok-badge" id="tokBadge"></span>
+      <button class="hd-gear" onclick="openSetup()" title="模型配置（Base URL / API Key / 模型名）" aria-label="模型配置">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.01a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.01a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.01a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      </button>
       <div class="evo-pill" onclick="openEvo()" title="点击查看进化细节">
         <span class="pulse" id="evoPulse"></span>
         <span id="evoPillText">进化系统</span>
@@ -291,6 +320,25 @@
 
 <!-- 移动端侧栏遮罩 -->
 <div id="sideMask" onclick="toggleSidebar(false)"></div>
+
+<!-- 模型配置弹窗（首启未配置自动弹出；?setup=1 强制弹出） -->
+<div id="setupMask" onclick="closeSetup()"></div>
+<div id="setupCard" role="dialog" aria-label="模型配置">
+  <div class="su-head">
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--acc,#6366F1)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.01a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.01a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.01a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+    <b>模型配置</b>
+    <button class="ed-close" onclick="closeSetup()" aria-label="关闭">✕</button>
+  </div>
+  <label class="su-label">Base URL<input id="suUrl" placeholder="https://api.example.com/v1" autocomplete="off" spellcheck="false"></label>
+  <label class="su-label">API Key<input id="suKey" type="password" placeholder="留空表示保持不变" autocomplete="new-password"></label>
+  <label class="su-label">模型名<input id="suModel" placeholder="例如 deepseek-chat / gpt-4o-mini" autocomplete="off" spellcheck="false"></label>
+  <div class="su-row">
+    <button class="su-btn ghost" onclick="testLlm()">测试连接</button>
+    <button class="su-btn main" onclick="saveSetup()">保存</button>
+  </div>
+  <div id="setupMsg"></div>
+  <p class="su-tip">配置仅保存在本机（App 私有目录 / .data/config.json）。API Key 留空提交 = 保持已存值不变。</p>
+</div>
 
 <!-- 进化中心抽屉 -->
 <div id="evoMask" onclick="closeEvo()"></div>
@@ -754,6 +802,31 @@
     if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(); }
   });
 
+  /* ---------- 模型配置（设置按钮 / 首启自动弹出） ---------- */
+  function setupMsg(txt, err) { const m = $('setupMsg'); m.textContent = txt || ''; m.classList.toggle('err', !!err); }
+  async function openSetup() {
+    try {
+      const r = await api('/api/config'); const c = (r.config && r.config.inner) || {};
+      $('suUrl').value = c.base_url || ''; $('suModel').value = c.model || ''; $('suKey').value = '';
+      $('suKey').placeholder = (c.api_key ? '已配置（' + c.api_key + '）' : '尚未配置') + ' · 留空不修改';
+    } catch (e) { /* 接口异常也允许手填 */ }
+    setupMsg(''); $('setupMask').classList.add('show'); $('setupCard').classList.add('show');
+  }
+  function closeSetup() { $('setupMask').classList.remove('show'); $('setupCard').classList.remove('show'); }
+  async function saveSetup() {
+    const inner = { base_url: $('suUrl').value.trim(), model: $('suModel').value.trim(), api_key: $('suKey').value.trim() };
+    if (!inner.base_url || !inner.model) { setupMsg('Base URL 与模型名为必填项', true); return; }
+    setupMsg('保存中…');
+    const r = await api('/api/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ inner }) });
+    if (r.success) { setupMsg('已保存 ✓ 可以开始对话了'); setTimeout(closeSetup, 900); loadHealth(); }
+    else setupMsg('保存失败：' + (r.error || 'HTTP 错误'), true);
+  }
+  async function testLlm() {
+    setupMsg('测试中…');
+    const r = await api('/api/llm/test', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ base_url: $('suUrl').value.trim(), api_key: $('suKey').value.trim(), model: $('suModel').value.trim() }) });
+    setupMsg((r.ok ? '连接成功 ✓ ' : '连接失败：') + (r.result || ''), !r.ok);
+  }
+
   /* ---------- 启动 ---------- */
   (async function init(){
     if (window.innerWidth <= 860) $('sidebar').classList.add('hidden');
@@ -764,6 +837,11 @@
     loadHealth(); loadWorkspaces(); loadHistory(); recoverRunningTask(); renderEvo(true);
     setInterval(loadHealth, 15000);
     setInterval(refreshEvoSilent, 8000);
+    // 首启未配置自动弹设置面板；?setup=1 强制弹出（APK/新装场景直达）
+    try {
+      const r = await api('/api/config'); const c = (r.config && r.config.inner) || {};
+      if (new URLSearchParams(location.search).get('setup') === '1' || !c.base_url || !c.api_key || !c.model) openSetup();
+    } catch (e) { /* 静默：失败不打断主流程 */ }
   })();
 </script>
 </body>
