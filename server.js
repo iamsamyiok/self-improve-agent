@@ -749,7 +749,18 @@ const { matchSmallTalk } = require('./lib/smalltalk');
         const parts = [];
         if (!emptyHit(vec)) parts.push(`【语义记忆】\n${trim(vec)}`);
         if (!emptyHit(arc)) parts.push(`【历史任务】\n${trim(arc)}`);
-        return parts.length ? `\n\n[框架预取·相关记忆] 以下是自动检索到的与本任务相关的既有记忆与历史任务（仅供参考，与本任务无关时必须忽略，禁止被旧任务带偏目标）：\n${parts.join('\n')}\n需要更多细节可继续用 memory recall / archive_search 检索。` : '';
+        // 技能预取（v3.4.0）：任务开始即按任务描述主动匹配技能库。清单被动注入有盲区——
+        // 按字母序截断（>40 隐藏尾部）+ 模型不自觉对照清单，明显匹配的技能会被跳过
+        // （2026-09-04 深度调研任务实证：web-research 在清单中却未被使用）。
+        // 匹配对全量技能库打分、纯内存毫秒级，失败静默不影响记忆预取
+        try {
+          const skillHits = require('./plugins/skill').matchSkills({ cwd: WS_DIR }, message, 3);
+          if (skillHits.length) {
+            const lines = skillHits.map(h => `- ${h.name}: ${String(h.desc).slice(0, 80)}`);
+            parts.push(`【可能匹配的技能】开始相关操作前必须先 skill.get("<技能名>") 读全文并按其步骤执行（判断与任务无关时可说明后跳过）：\n${lines.join('\n')}`);
+          }
+        } catch { /* 技能匹配失败不影响任务 */ }
+        return parts.length ? `\n\n[框架预取] 以下是自动检索到的与本任务相关的既有记忆、历史任务与技能匹配（仅供参考，与本任务无关时必须忽略，禁止被旧任务带偏目标）：\n${parts.join('\n')}\n需要更多细节可继续用 memory recall / archive_search 检索。` : '';
       })(),
       new Promise(r => setTimeout(() => r(''), 2000))
     ]).then(r => {

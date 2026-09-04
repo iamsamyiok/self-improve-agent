@@ -152,8 +152,57 @@ function promptSection(ctx) {
   while (section().length > PROMPT_MAX_CHARS && rows.length > PROMPT_MIN_SKILLS) {
     hidden += 1;
     rows = rows.slice(0, -1);
+   }
+   return section();
+ }
+
+// ---------- 技能预取匹配（框架预取第 4 路：任务文本 → 主动推送可能匹配的技能） ----------
+// 与清单被动注入（promptSection）互补：清单按字母序截断（>40 隐藏尾部）+ 模型不一定自觉对照清单，
+// 会导致明显匹配的技能被跳过（2026-09-04 深度调研任务实证：web-research 在清单中却未被使用）。
+// 预取按任务描述对全量技能库打分（不受清单截断影响），命中即在任务开始时提示先 skill.get 再动手。
+// 匹配面覆盖中英混合场景：中文技能描述直接按 2-gram 相交；英文描述靠中→英提示词桥接（调研→research）。
+const SKILL_MATCH_STOP = new Set(('the and for with this that use using when user users need needs want please help then their have has ' +
+  '创建 使用 需要 可以 进行 这个 任务 文件 生成 添加 修改 删除 查看 一下 相关 内容 信息 操作 执行 处理 支持 实现 提供 返回 输出 包含 基于 通过 如果 或者 以及').split(/\s+/));
+const SKILL_MATCH_ZH_EN = {
+  '调研': 'research', '研究': 'research', '搜索': 'search', '检索': 'search', '报告': 'report', '文档': 'document',
+  '代码': 'code', '调试': 'debug', '测试': 'test', '写作': 'writing', '撰写': 'writing', '翻译': 'translate',
+  '图像': 'image', '视频': 'video', '数据': 'data', '网页': 'web', '前端': 'frontend', '后端': 'backend',
+  '计划': 'plan', '规划': 'plan', '头脑风暴': 'brainstorm', '评审': 'review', '审查': 'review', '分析': 'analysis', '部署': 'deploy'
+};
+function skillMatchTokens(text) {
+  const s = String(text || '');
+  const grams = new Set();
+  const enWords = (s.toLowerCase().match(/[a-z][a-z0-9_-]{2,}/g) || []).filter(w => !SKILL_MATCH_STOP.has(w));
+  for (const w of enWords) grams.add(w);
+  const zhRuns = s.match(/[\u4e00-\u9fa5]{2,}/g) || [];
+  for (const run of zhRuns) {
+    for (const [zh, en] of Object.entries(SKILL_MATCH_ZH_EN)) if (run.includes(zh)) grams.add(en);
+    if (run.length <= 4) { grams.add(run); continue; }
+    for (let i = 0; i + 2 <= run.length; i++) { // 长串切 2-gram，避免整串匹配过严
+      const g = run.slice(i, i + 2);
+      if (!SKILL_MATCH_STOP.has(g)) grams.add(g);
+    }
   }
-  return section();
+  return [...grams];
+}
+function matchSkills(ctx, text, topN) {
+  const grams = skillMatchTokens(text);
+  if (!grams.length) return [];
+  const gset = new Set(grams);
+  const bridgeValues = new Set(Object.values(SKILL_MATCH_ZH_EN)); // 中英桥接词 = 核心意图词，name/desc 同权重
+  const scored = [];
+  for (const s of listAll(ctx)) {
+    const nameHay = String(s.name || '').toLowerCase();
+    const descHay = String(s.desc || '').toLowerCase();
+    let score = 0;
+    for (const g of gset) {
+      const strong = bridgeValues.has(g);
+      if (nameHay.includes(g)) score += strong ? 3 : 2; // 技能名命中权重高（最直接的场景对应）
+      else if (descHay.includes(g)) score += strong ? 2 : 1;
+    }
+    if (score >= 2) scored.push({ name: s.name, desc: String(s.desc || ''), score });
+  }
+  return scored.sort((a, b) => b.score - a.score || a.name.localeCompare(b.name)).slice(0, Math.max(1, topN || 3));
 }
 
 function findBySlug(ctx, name) {
@@ -272,9 +321,31 @@ async function installFromGitHub(src, ctx) {
   const metaPath = path.join(root, '.installed.json');
   let meta = {};
   try { meta = JSON.parse(fs.readFileSync(metaPath, 'utf8')); } catch { /* ignore */ }
-  const installed = [];
+  // 既有注册名 → 目录名映射（安装前快照）：stdName 已被其他目录占用时跳过该技能，
+  // 避免 listAll 按 name 去重隐藏后来者（同名目录 frontmatter name 相同的场景，2026-09-04 实证）
+  const existingNames = new Map();
+  for (const d of fs.readdirSync(root, { withFileTypes: true })) {
+    if (!d.isDirectory() || d.name.startsWith('.')) continue;
+    let nm = d.name;
+    try {
+      const fm = parseFrontmatter(fs.readFileSync(path.join(root, d.name, 'SKILL.md'), 'utf8'));
+      if (fm && fm.name && STD_NAME_RE.test(fm.name)) nm = fm.name;
+    } catch { /* 读失败用目录名 */ }
+    if (!existingNames.has(nm)) existingNames.set(nm, d.name);
+  }
+  const installed = [], conflicts = [];
+  const taken = new Set(); // 本批次内 stdName 互斥
   for (const it of toInstall) {
     const safeName = it.name.replace(/[^a-zA-Z0-9\u4e00-\u9fa5-]/g, '-');
+    let stdName = safeName;
+    try {
+      const fm = parseFrontmatter(it.files.get('SKILL.md').toString('utf8'));
+      if (fm && fm.name && STD_NAME_RE.test(fm.name)) stdName = fm.name;
+    } catch { /* ignore */ }
+    const holder = existingNames.get(stdName);
+    if (holder && holder !== safeName) { conflicts.push(`${stdName}（已被技能目录 ${holder} 占用）`); continue; }
+    if (taken.has(stdName)) { conflicts.push(`${stdName}（本次安装源内重名：${safeName}）`); continue; }
+    taken.add(stdName);
     const dest = path.join(root, safeName);
     // 防路径逃逸与覆盖无关目录：目标已存在但无 SKILL.md 则拒绝
     if (fs.existsSync(dest) && !fs.existsSync(path.join(dest, 'SKILL.md'))) {
@@ -290,17 +361,13 @@ async function installFromGitHub(src, ctx) {
       fs.writeFileSync(target, content);
       n++; bytes += content.length;
     }
-    // 读 frontmatter 拿标准名（记录用）
-    let stdName = safeName;
-    try {
-      const fm = parseFrontmatter(fs.readFileSync(path.join(dest, 'SKILL.md'), 'utf8'));
-      if (fm && fm.name && STD_NAME_RE.test(fm.name)) stdName = fm.name;
-    } catch { /* ignore */ }
     meta[stdName] = { source: `github:${owner}/${repo}`, ref: br, dir: safeName, files: n, bytes, installedAt: new Date().toISOString() };
     installed.push(`${stdName}（${n} 个文件，${(bytes / 1024).toFixed(0)}KB）`);
   }
   try { fs.writeFileSync(metaPath, JSON.stringify(meta, null, 2)); } catch { /* 记录失败不阻塞 */ }
-  return `已从 github.com/${owner}/${repo}（${br}）安装 ${installed.length} 个技能到共享技能库：\n${installed.join('\n')}\n用 skill.list() 查看，get(名) 读全文后按其指引执行。`;
+  let note = '';
+  if (conflicts.length) note = `\n\n⚠ 以下 ${conflicts.length} 个技能因注册名冲突被跳过（同名技能已存在，避免清单去重后互相隐藏）：\n- ${conflicts.join('\n- ')}`;
+  return `已从 github.com/${owner}/${repo}（${br}）安装 ${installed.length} 个技能到共享技能库：\n${installed.join('\n') || '（无）'}\n用 skill.list() 查看，get(名) 读全文后按其指引执行。${note}`;
 }
 
 
@@ -348,6 +415,12 @@ module.exports = {
       }
       const slug = toSlug(name);
       const fp = path.join(ctx.cwd, 'skills', `${slug}.md`);
+      // 注册名冲突校验：同工作区已有一个同名技能（目录型）指向其他文件时拒绝保存，
+      // 否则 listAll 按 name 去重会隐藏其中之一，skill:get 无法可靠命中（2026-09-04 深度调研重名实证）
+      const dup = findBySlug(ctx, name);
+      if (dup && dup.entry !== fp && path.resolve(dup.root) === path.resolve(ctx.cwd, 'skills')) {
+        throw new Error(`技能名 ${name} 已被同工作区的 ${path.basename(dup.entry)} 占用（注册名冲突），请换名或先 delete 旧技能`);
+      }
       const existed = fs.existsSync(fp);
       fs.mkdirSync(path.join(ctx.cwd, 'skills'), { recursive: true });
       fs.writeFileSync(fp, content, 'utf8');
@@ -398,3 +471,5 @@ module.exports = {
   }
 };
 module.exports.promptSection = promptSection;
+module.exports.matchSkills = matchSkills;
+module.exports.skillMatchTokens = skillMatchTokens;

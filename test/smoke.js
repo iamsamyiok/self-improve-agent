@@ -525,6 +525,79 @@ async function main() {
       process.env.DUAL_AGENT_SKILLS_SHARED = prev;
     }
   });
+  await t('技能预取：任务文本主动匹配技能库（中英桥接 + 全量不受清单截断影响）', async () => {
+    const skillPlugin = require('../plugins/skill');
+    // MOCK 库：web-research 类（中文 desc）与英文 desc 技能各一 + 无关技能
+    fs.mkdirSync(path.join(WS, 'skills', 'm-research'), { recursive: true });
+    fs.writeFileSync(path.join(WS, 'skills', 'm-research', 'SKILL.md'),
+      '---\nname: m-research\ndescription: 联网调研工作流。当任务需要搜索网络信息、查证事实、比较多来源时使用。\n---\n\n正文', 'utf8');
+    fs.mkdirSync(path.join(WS, 'skills', 'm-deep'), { recursive: true });
+    fs.writeFileSync(path.join(WS, 'skills', 'm-deep', 'SKILL.md'),
+      '---\nname: m-deep\ndescription: Use when the user needs multi-source research with citation tracking and structured report generation.\n---\n\n正文', 'utf8');
+    fs.mkdirSync(path.join(WS, 'skills', 'm-csv'), { recursive: true });
+    fs.writeFileSync(path.join(WS, 'skills', 'm-csv', 'SKILL.md'),
+      '---\nname: m-csv\ndescription: 创建 CSV 表格数据文件。\n---\n\n正文', 'utf8');
+    // 深度调研任务：中文 gram「调研」命中 m-research；中英桥接（调研→research）命中英文 desc 的 m-deep
+    const hits = skillPlugin.matchSkills(ctx, '深度调研黄仁勋与中国大陆的血缘关系', 3);
+    const names = hits.map(h => h.name);
+    assert.ok(names.includes('m-research'), '中文调研任务应命中中文 desc 技能：' + JSON.stringify(names));
+    assert.ok(names.includes('m-deep'), '中英桥接应命中英文 desc 技能：' + JSON.stringify(names));
+    assert.ok(!names.includes('m-csv'), '无关技能不应被推荐');
+    // 静默场景：与任何技能无关的任务不产生推荐
+    assert.deepStrictEqual(skillPlugin.matchSkills(ctx, '你好', 3), [], '无词任务应静默');
+    fs.rmSync(path.join(WS, 'skills', 'm-research'), { recursive: true, force: true });
+    fs.rmSync(path.join(WS, 'skills', 'm-deep'), { recursive: true, force: true });
+    fs.rmSync(path.join(WS, 'skills', 'm-csv'), { recursive: true, force: true });
+  });
+  await t('技能预取接线：server 预取块含技能匹配段（静态防回归）', async () => {
+    const serverSrc = fs.readFileSync(path.join(ROOT, 'server.js'), 'utf8');
+    assert.ok(serverSrc.includes("require('./plugins/skill').matchSkills"), '预取应调用技能匹配');
+    assert.ok(serverSrc.includes('【可能匹配的技能】'), '预取应含技能匹配提示段');
+    assert.ok(serverSrc.includes('skill.get'), '提示应含 skill.get 纪律');
+  });
+  await t('技能重名防护：save 拒绝同工作区注册名冲突；install 静态含冲突校验', async () => {
+    fs.mkdirSync(path.join(WS, 'skills', 'dup-a'), { recursive: true });
+    fs.writeFileSync(path.join(WS, 'skills', 'dup-a', 'SKILL.md'),
+      '---\nname: dup-x\ndescription: 目录型占坑\n---\n\n正文', 'utf8');
+    // 目录型注册名为 dup-x；再用 save 存单文件 dup-x → 应拒绝（同工作区同名指向不同 entry）
+    const clashRes = await plugins.runPlugin('skill', { action: 'save', name: 'dup-x', content: '# 冲突' }, ctx);
+    assert.ok(String(clashRes).includes('已被同工作区') && String(clashRes).includes('执行出错'), 'save 应拒绝注册名冲突：' + clashRes);
+    // 幂等更新自身：同 entry 覆盖应放行（单文件二次 save）
+    await plugins.runPlugin('skill', { action: 'save', name: 'dup-ok', content: '# v1' }, ctx);
+    const again = await plugins.runPlugin('skill', { action: 'save', name: 'dup-ok', content: '# v2' }, ctx);
+    assert.ok(String(again).includes('已更新'), '同文件幂等更新应放行');
+    fs.rmSync(path.join(WS, 'skills', 'dup-a'), { recursive: true, force: true });
+    // install 冲突校验（静态断言，避免真实网络）：注册名快照 + 跳过冲突 + 提示段
+    const skillSrc = fs.readFileSync(path.join(ROOT, 'plugins', 'skill.js'), 'utf8');
+    assert.ok(skillSrc.includes('existingNames'), 'install 应建注册名快照');
+    assert.ok(skillSrc.includes('conflicts.push'), 'install 应收集冲突并跳过');
+    assert.ok(skillSrc.includes('注册名冲突被跳过'), 'install 返回应提示冲突');
+  });
+  await t('技能清单截断盲区：预取匹配覆盖 >40 清单隐藏的尾部技能', async () => {
+    const skillPlugin = require('../plugins/skill');
+    // 构造 45 个字母序在前 + 1 个尾部（字母序最后）技能 → promptSection 截断后不含尾部
+    const made = [];
+    try {
+      for (let i = 0; i < 45; i++) {
+        const nm = 'fill-' + String(i).padStart(2, '0');
+        fs.mkdirSync(path.join(WS, 'skills', nm), { recursive: true });
+        fs.writeFileSync(path.join(WS, 'skills', nm, 'SKILL.md'),
+          `---\nname: ${nm}\ndescription: 填充技能 ${nm}\n---\n\n正文`, 'utf8');
+        made.push(nm);
+      }
+      fs.mkdirSync(path.join(WS, 'skills', 'ztail-research'), { recursive: true });
+      fs.writeFileSync(path.join(WS, 'skills', 'ztail-research', 'SKILL.md'),
+        '---\nname: ztail-research\ndescription: 深度调研与多源交叉验证工作流。\n---\n\n正文', 'utf8');
+      const sec = skillPlugin.promptSection(ctx);
+      assert.ok(sec.includes('另有'), '超 40 个清单应截断并提示');
+      assert.ok(!sec.includes('ztail-research'), '尾部技能应被清单隐藏');
+      const hits = skillPlugin.matchSkills(ctx, '深度调研这个课题', 3);
+      assert.ok(hits.map(h => h.name).includes('ztail-research'), '预取匹配应覆盖被清单隐藏的尾部技能：' + JSON.stringify(hits));
+    } finally {
+      for (const nm of made) fs.rmSync(path.join(WS, 'skills', nm), { recursive: true, force: true });
+      fs.rmSync(path.join(WS, 'skills', 'ztail-research'), { recursive: true, force: true });
+    }
+  });
   await t('read 插件：skill: 协议直读技能捆绑资源（含就近优先与 frontmatter 名匹配）', async () => {
     const shared = path.join(TMP, 'skills-shared2');
     // 目录名与 frontmatter name 不同：验证 frontmatter 名也可命中

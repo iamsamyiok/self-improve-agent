@@ -247,7 +247,7 @@ function clearEmbConfig() {
     const sessFp = path.join(E2E_WS, 'default', 'hwj-messages.json');
     const sess = JSON.parse(fs.readFileSync(sessFp, 'utf8'));
     const userMsgs = sess.filter(m => m.role === 'user');
-    const hit = userMsgs.find(m => /框架预取·相关记忆/.test(String(m.content)) && /历史任务/.test(String(m.content)));
+    const hit = userMsgs.find(m => /框架预取/.test(String(m.content)) && /历史任务/.test(String(m.content)));
     assert.ok(hit, '第二条任务消息应含预取注入的历史任务');
   });
 
