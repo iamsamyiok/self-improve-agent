@@ -168,8 +168,8 @@ assert.ok(evo.targetsFailureModes({reason:'针对「索引缺少二级条目」�
 assert.ok(!evo.targetsFailureModes({reason:'改进搜索关键词策略',change:'x'},fm),'无关文本不应命中');
 // O5. case 内 A/B 并行：静态防回归
 assert.ok(evoSrc.includes('await Promise.all([') && evoSrc.includes("label:'baseline'") && evoSrc.includes("label:'candidate'"),'runCase 内 baseline/candidate 应并行');
-// O6. judge 输入瘦身：静态防回归（slimMetrics + finalText 3000）
-assert.ok(evoSrc.includes('slimMetrics') && evoSrc.includes("slice(0,3000)"),'judge 输入必须瘦身（metrics 聚合 + finalText 3000）');
+// O6. judge 输入瘦身：静态防回归（slimMetrics + finalText 6000，对齐 Agnes 80% 预算）
+assert.ok(evoSrc.includes("slimMetrics") && evoSrc.includes("slice(0,6000)"), "judge 输入瘦身对齐上下文预算（metrics 聚合 + finalText 6000，lib/limits.js 80% 基准）");
 // O7. 进化自身 usage 记账：调用后落盘 llm-usage.jsonl
 evo.recordLlmUsage('测试标签',{prompt_tokens:10,completion_tokens:5,total_tokens:15});
 const usageLines=fs.readFileSync(path.join(evo.EV_ROOT,'llm-usage.jsonl'),'utf8').split('\n').filter(Boolean).map(JSON.parse);

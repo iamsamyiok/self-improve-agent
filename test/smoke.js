@@ -723,13 +723,14 @@ async function main() {
     assert.ok(lg.some(m => (m.mergedFrom || []).length === 3), '长期库应有 3 条归并的条目');
   });
   await t('上下文预算：超阈值压缩旧 tool 结果（保配对、保近期全文）', () => {
-    // 构造足够大的消息使 token 数超过预算 60000
+    // 构造足够大的消息使 token 数超过窗口预算（Agnes 80%，lib/limits.js）
     // 第一个大 tool 在最前面，确保不在"最近 6 个"保留集内
+    const L = require('../lib/limits');
     const msgs = [
       { role: 'system', content: 'S'.repeat(5000) },
       { role: 'user', content: '任务' },
       { role: 'assistant', content: null, tool_calls: [{ id: 'c0', type: 'function', function: { name: 'read', arguments: '{"path":"a"}' } }] },
-      { role: 'tool', tool_call_id: 'c0', content: 'A'.repeat(300000) }, // 第 0 个 tool，应被压缩
+      { role: 'tool', tool_call_id: 'c0', content: 'A'.repeat(1800000) }, // 第 0 个 tool，应被压缩
       { role: 'assistant', content: null, tool_calls: [{ id: 'c1', type: 'function', function: { name: 'read', arguments: '{"path":"b"}' } }] },
       { role: 'tool', tool_call_id: 'c1', content: 'B'.repeat(200) },
       { role: 'assistant', content: null, tool_calls: [{ id: 'c2', type: 'function', function: { name: 'read', arguments: '{"path":"c"}' } }] },
@@ -743,7 +744,7 @@ async function main() {
       { role: 'assistant', content: null, tool_calls: [{ id: 'c6', type: 'function', function: { name: 'read', arguments: '{"path":"g"}' } }] },
       { role: 'tool', tool_call_id: 'c6', content: 'G'.repeat(200) },
     ];
-    const budget = 60000;
+    const budget = L.INPUT_BUDGET_TOKENS;
     assert.ok(estimateMessagesTokens(msgs) > budget, `原始 token ${estimateMessagesTokens(msgs)} 应超预算 ${budget}`);
     const out = budgetMessages(msgs);
     assert.equal(out.length, msgs.length, '不得删除条目（配对完整性）');
@@ -2309,6 +2310,24 @@ async function main() {
     assert.ok(html.includes("payload.evolution"), '保存时提交 evolution 段');
     assert.ok(html.includes("srcEl.id = 'edLlmSrc'"), '进化抽屉 llmSource 展示存在');
   });
+  await t('上下文预算：字符限制对齐 Agnes 窗口（80% 基准）', () => {
+    const L = require('../lib/limits');
+    assert.strictEqual(L.CTX_TOKENS, 524288, 'agnes-2.5-flash 实测窗口（512K tokens）');
+    assert.strictEqual(L.SAFE_RATIO, 0.8, '预留 20% 空闲');
+    assert.strictEqual(L.INPUT_BUDGET_TOKENS, 419430, '输入预算 = 窗口 × 80%');
+    assert.ok(L.INPUT_BUDGET_CHARS <= L.INPUT_BUDGET_TOKENS * L.CHARS_PER_TOKEN, '字符预算换回 tokens 不得超预算');
+    // inner 对话预算默认对齐 limits（此前 60000 过于保守）
+    const inner = fs.readFileSync(path.join(ROOT, 'lib', 'inner.js'), 'utf8');
+    assert.ok(inner.includes('limits.INPUT_BUDGET_TOKENS'), 'inner 上下文预算应默认取 limits 输入预算');
+    // 关键拼装截断均远小于预算（占窗口 8% 以内），无超限风险
+    const evo = fs.readFileSync(path.join(ROOT, 'lib', 'evolution.js'), 'utf8');
+    assert.ok(evo.includes('slice(0, 48000)'), 'mutation 上下文拼装上限 48K 字符');
+    const scout = fs.readFileSync(path.join(ROOT, 'lib', 'scout.js'), 'utf8');
+    assert.ok(scout.includes('|| 24000'), 'README 截断放宽至 24K 字符');
+    const plugins = fs.readFileSync(path.join(ROOT, 'lib', 'plugins.js'), 'utf8');
+    assert.ok(plugins.includes('16384'), '单条工具输出截断 16K 字符');
+  });
+
   await t('效果评估：健康分卡与采集接线静态断言', () => {
     const html = fs.readFileSync(path.join(ROOT, 'public', 'index.html'), 'utf8');
     assert.ok(html.includes('id="edHealth"'), '健康分卡片存在');
