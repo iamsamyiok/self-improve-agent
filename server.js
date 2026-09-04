@@ -26,6 +26,18 @@ const { validProfiles, pickProfile } = require('./lib/profiles');
 const { NET_CODES, withTaskResume } = require('./lib/llmRetry');
 // 意图系统已解耦为插件，通过 plugins.runPlugin('intent', ...) 调用
 
+// ---------- 经验检索层（zvec 融合）----------
+// lessons/playbooks 注入从"有什么塞什么"升级为按当前任务语义 top-k 召回。
+// lib/experience.js 内部自动降级：zvec 不可用/移动端 → 内置 bigram 扫描（行为与旧版一致）。
+// 注入失败仅告警，lessonsPromptSection/playbooksPromptSection 自身还有一层降级兜底。
+try {
+  const experience = require('./lib/experience');
+  const expStore = experience.createExperienceStore({ dataDir: DATA_DIR });
+  require('./lib/evolution').setExperienceStore(expStore);
+} catch (e) {
+  console.warn('[experience] 初始化失败，使用内置检索:', (e && e.message) || e);
+}
+
 // ---------- 日志 tee ----------
 const LOG_PATH = path.join(DATA_DIR, 'server.log');
 try { fs.writeFileSync(LOG_PATH, `=== dual-agent-loop started ${new Date().toISOString()} ===\n`); } catch { /* ignore */ }

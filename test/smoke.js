@@ -429,6 +429,21 @@ async function main() {
     assert.ok(/^插件 tree/.test(esc) && esc.includes('越界'), esc);
   });
 
+  await t('grep 插件：工作区内容检索（BM25 排序 + 中文命中 + 片段 + 越界拦截）', async () => {
+    fs.writeFileSync(path.join(WS, 'gp-auth.js'), 'function userLogin(token) { return verifySession(token); }\n', 'utf8');
+    fs.writeFileSync(path.join(WS, 'gp-note.md'), '部署完成后必须执行探活检查确认端口监听正常。\n', 'utf8');
+    fs.writeFileSync(path.join(WS, 'gp-empty.txt'), '', 'utf8');
+    const r1 = await plugins.runPlugin('grep', { query: '登录验证 token 会话' }, ctx);
+    assert.ok(r1.includes('gp-auth.js'), r1);
+    assert.ok(r1.includes('userLogin'), '命中片段应包含匹配行内容');
+    const r2 = await plugins.runPlugin('grep', { query: '探活检查端口监听' }, ctx);
+    assert.ok(r2.includes('gp-note.md'), r2);
+    const r3 = await plugins.runPlugin('grep', { query: '完全不存在的量子词汇' }, ctx);
+    assert.ok(r3.includes('无文件命中'), r3);
+    const esc = await plugins.runPlugin('grep', { query: 'test', dir: '../../' }, ctx);
+    assert.ok(/^插件 grep/.test(esc) && esc.includes('越界'), esc);
+  });
+
   await t('archive 插件：save/list/diff/restore/clean 闭环', async () => {
     fs.writeFileSync(path.join(WS, 'ar-doc.md'), 'v1 内容', 'utf8');
     const save = await plugins.runPlugin('archive', { action: 'save', tag: 'test-snap' }, ctx);

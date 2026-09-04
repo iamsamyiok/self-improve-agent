@@ -42,7 +42,10 @@
   },
   "scripts": {
     "start": "node server.js",
-    "test": "node test/smoke.js && node test/hwj-smoke.js && node test/memory-smoke.js && node test/evolution-smoke.js && node test/evolution-e2e.js && node test/web-evolution-e2e.js",
-    "prepublishOnly": "node test/smoke.js && node test/hwj-smoke.js && node test/memory-smoke.js && node test/evolution-smoke.js && node test/evolution-e2e.js && node test/web-evolution-e2e.js"
+    "test": "node test/smoke.js && node test/hwj-smoke.js && node test/memory-smoke.js && node test/evolution-smoke.js && node test/experience-smoke.js && node test/evolution-e2e.js && node test/web-evolution-e2e.js",
+    "prepublishOnly": "node test/smoke.js && node test/hwj-smoke.js && node test/memory-smoke.js && node test/evolution-smoke.js && node test/experience-smoke.js && node test/evolution-e2e.js && node test/web-evolution-e2e.js"
+  },
+  "optionalDependencies": {
+    "@zvec/zvec": "^0.7.1"
   }
 }
