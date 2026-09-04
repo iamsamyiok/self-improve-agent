@@ -7,6 +7,7 @@
 <link rel="icon" href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40"><rect x="1" y="1" width="38" height="38" rx="9" fill="%236366F1"/><path d="M20 9.5c-5.8 0-10.5 3.8-10.5 8.4 0 2.6 1.5 5 3.8 6.5-.2 1.6-1 3.1-2.3 4.3 2.4-.2 4.5-1.1 6.1-2.4 1 .2 1.9.3 2.9.3 5.8 0 10.5-3.8 10.5-8.4S25.8 9.5 20 9.5z" fill="white"/><path d="M15.6 18.4h8.8m0 0-2.6-2.6m2.6 2.6-2.6 2.6m-6.2-.4h8.8m0 0-2.6-2.6m2.6 2.6-2.6 2.6" stroke="%236366F1" stroke-width="1.7" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>'>
 <style>
   :root {
+    --brand: #6366F1; --brand-2: #8B5CF6; --brand-dark: #4F46E5; --brand-light: #EEF2FF;
     --green: #10a37f; --green-dark: #0e9069; --green-light: #e7f6f1;
     --bg: #ffffff; --side: #f9f9f9; --bubble: #f4f4f4;
     --text: #0d0d0d; --text-2: #5d5d5d; --text-3: #8f8f8f;
@@ -19,6 +20,11 @@
   body { font: 15px/1.75 -apple-system, "Segoe UI", Roboto, "Helvetica Neue", "PingFang SC", "Microsoft YaHei", sans-serif; color: var(--text); background: var(--bg); overscroll-behavior:none; }
   button { font-family: inherit; }
   #app { display:flex; height:100%; height:100dvh; }
+  /* 细滚动条（桌面端精致感；移动端原生不受影响） */
+  ::-webkit-scrollbar { width:8px; height:8px; }
+  ::-webkit-scrollbar-thumb { background:#d5d5dd; border-radius:8px; border:2px solid transparent; background-clip:content-box; }
+  ::-webkit-scrollbar-thumb:hover { background:#bcbcc8; border:2px solid transparent; background-clip:content-box; }
+  ::-webkit-scrollbar-track { background:transparent; }
 
   /* ============ 侧边栏 ============ */
   #sidebar { width:244px; background:var(--side); border-right:1px solid var(--border); display:flex; flex-direction:column; flex-shrink:0; transition:margin .25s; }
@@ -33,7 +39,7 @@
   nav { flex:1; overflow-y:auto; padding:0 8px; }
   .nav-item { display:flex; align-items:center; gap:10px; padding:9px 10px; border-radius:10px; font-size:13.5px; color:var(--text); cursor:pointer; transition:background .15s; margin-bottom:2px; user-select:none; }
   .nav-item:hover { background:#ececec; }
-  .nav-item.active { background:#e3e3e3; font-weight:600; }
+  .nav-item.active { background:var(--brand-light); font-weight:600; color:var(--brand-dark); }
   .nav-item .ni-badge { margin-left:auto; font-size:10.5px; background:var(--green-light); color:var(--green-dark); border-radius:8px; padding:1px 7px; font-weight:600; }
   .sb-sec { font-size:11px; color:var(--text-3); padding:14px 12px 4px; }
   .sb-foot { padding:12px; border-top:1px solid var(--border); }
@@ -62,14 +68,14 @@
   /* ============ 消息流 ============ */
   #chat { flex:1; overflow-y:auto; scroll-behavior:smooth; }
   .chat-inner { max-width:768px; margin:0 auto; padding:28px 20px 12px; display:flex; flex-direction:column; gap:22px; }
-  .msg-user { align-self:flex-end; max-width:75%; background:var(--bubble); border-radius:24px; padding:10px 18px; white-space:pre-wrap; word-break:break-word; animation:fadein .25s; }
+  .msg-user { align-self:flex-end; max-width:75%; background:var(--brand-light); border-radius:24px 24px 8px 24px; padding:10px 18px; white-space:pre-wrap; word-break:break-word; animation:fadein .25s; }
   .msg-assistant { display:flex; gap:14px; animation:fadein .25s; }
-  .avatar { width:26px; height:26px; border-radius:50%; background:var(--green); color:#fff; font-size:12px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0; margin-top:2px; }
+  .avatar { width:26px; height:26px; border-radius:50%; background:linear-gradient(135deg, var(--brand), var(--brand-2)); color:#fff; font-size:12px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0; margin-top:2px; box-shadow:0 2px 6px rgba(99,102,241,.35); }
   .msg-assistant .body { flex:1; min-width:0; word-break:break-word; }
   .msg-system { align-self:center; font-size:12px; color:var(--text-3); background:var(--bubble); border-radius:999px; padding:4px 14px; animation:fadein .25s; max-width:90%; text-align:center; }
   .msg-error { align-self:stretch; font-size:13px; color:#b91c1c; background:#fef2f2; border:1px solid #fecaca; border-radius:var(--radius); padding:10px 14px; animation:fadein .25s; white-space:pre-wrap; word-break:break-word; }
   @keyframes fadein { from{ opacity:0; transform:translateY(4px);} to{ opacity:1; transform:none;} }
-  .typing-cursor::after { content:'●'; font-size:9px; color:var(--green); animation:blink 1s step-end infinite; margin-left:3px; vertical-align:middle; }
+  .typing-cursor::after { content:'●'; font-size:9px; color:var(--brand); animation:blink 1s step-end infinite; margin-left:3px; vertical-align:middle; }
   @keyframes blink { 0%,100%{opacity:1;} 50%{opacity:0;} }
 
   /* markdown 渲染 */
@@ -84,36 +90,42 @@
   .body table { border-collapse:collapse; margin:10px 0; font-size:13.5px; width:100%; }
   .body th, .body td { border:1px solid var(--border-2); padding:6px 10px; text-align:left; }
   .body th { background:var(--side); font-weight:600; }
-  .body blockquote { border-left:3px solid var(--green); color:var(--text-2); padding:2px 12px; margin:8px 0; }
-  .body a { color:var(--green-dark); text-decoration:underline; text-underline-offset:2px; }
+  .body blockquote { border-left:3px solid var(--brand); color:var(--text-2); padding:2px 12px; margin:8px 0; }
+  .body a { color:var(--brand-dark); text-decoration:underline; text-underline-offset:2px; }
+  /* 代码块复制按钮（事件委托注入，流式渲染完成后出现在每个 pre 右上角） */
+  .body pre { position:relative; }
+  .copy-btn { position:absolute; top:6px; right:6px; border:1px solid var(--border); background:#fff; color:var(--text-3); font-size:11px; border-radius:7px; padding:3px 9px; cursor:pointer; opacity:0; transition:opacity .15s, background .15s; }
+  .body pre:hover .copy-btn, .copy-btn:focus { opacity:1; }
+  .copy-btn:hover { background:var(--side); color:var(--text); }
 
   /* 工具调用条 */
   /* 处理中指示器：对话流里唯一的"动态进程"，完成后自动淡出 */
   .busy-bar { display:flex; align-items:center; gap:9px; font-size:13px; color:var(--text-3); padding:4px 2px; animation:fadein .25s; transition:opacity .5s; }
   .busy-bar.fade { opacity:0; }
-  .spinner { width:13px; height:13px; border:2px solid var(--border-2); border-top-color:var(--green); border-radius:50%; animation:spin .8s linear infinite; flex-shrink:0; }
+  .spinner { width:13px; height:13px; border:2px solid var(--border-2); border-top-color:var(--brand); border-radius:50%; animation:spin .8s linear infinite; flex-shrink:0; }
   @keyframes spin { to{ transform:rotate(360deg);} }
 
   /* 空状态 */
   #welcome { max-width:768px; margin:0 auto; padding:9vh 20px 20px; text-align:center; }
-  #welcome h1 { font-size:28px; font-weight:600; letter-spacing:-.5px; margin-bottom:28px; }
+  #welcome h1 { font-size:28px; font-weight:700; letter-spacing:-.5px; margin-bottom:10px; background:linear-gradient(135deg, var(--brand), var(--brand-2)); -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; }
+  .welcome-sub { font-size:13.5px; color:var(--text-3); margin-bottom:30px; }
   .sug-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; text-align:left; }
-  .sug { border:1px solid var(--border); border-radius:var(--radius); padding:13px 15px; cursor:pointer; transition:background .15s; }
-  .sug:hover { background:var(--side); }
+  .sug { border:1px solid var(--border); border-radius:var(--radius); padding:13px 15px; cursor:pointer; transition:border-color .18s, box-shadow .18s, transform .18s; background:#fff; }
+  .sug:hover { border-color:#c7c9f4; box-shadow:0 4px 16px rgba(99,102,241,.1); transform:translateY(-1px); }
   .sug b { display:block; font-size:13.5px; font-weight:600; margin-bottom:2px; }
   .sug span { font-size:12px; color:var(--text-3); }
 
   /* ============ 输入区 ============ */
   .composer-wrap { padding:8px 20px calc(14px + env(safe-area-inset-bottom, 0px)); flex-shrink:0; background:linear-gradient(transparent, var(--bg) 30%); }
   .composer { max-width:768px; margin:0 auto; display:flex; align-items:flex-end; gap:8px; border:1px solid var(--border-2); border-radius:26px; padding:9px 9px 9px 16px; background:#fff; box-shadow:0 2px 12px rgba(0,0,0,.04); transition:box-shadow .2s, border-color .2s; }
-  .composer:focus-within { border-color:#c4c4cc; box-shadow:0 4px 18px rgba(0,0,0,.08); }
+  .composer:focus-within { border-color:#b9bcf0; box-shadow:0 4px 20px rgba(99,102,241,.13); }
   .composer textarea { flex:1; border:none; outline:none; resize:none; font:inherit; font-size:15px; line-height:1.6; max-height:180px; min-height:60px; /* 两行高度：1.6 行距 × 15px × 2 行 + 上下 padding 12px */ background:transparent; color:var(--text); padding:6px 0; }
   .composer textarea::placeholder { color:var(--text-3); }
   .composer textarea:disabled { color:var(--text-3); }
-  .c-btn { width:36px; height:36px; border-radius:50%; border:none; background:var(--green); color:#fff; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:background .15s, transform .1s; flex-shrink:0; }
-  .c-btn:hover { background:var(--green-dark); }
+  .c-btn { width:36px; height:36px; border-radius:50%; border:none; background:linear-gradient(135deg, var(--brand), var(--brand-2)); color:#fff; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:filter .15s, transform .1s; flex-shrink:0; }
+  .c-btn:hover { filter:brightness(.92); }
   .c-btn:active { transform:scale(.94); }
-  .c-btn:disabled { background:#d9d9e3; cursor:not-allowed; }
+  .c-btn:disabled { background:#d9d9e3; filter:none; cursor:not-allowed; }
   .c-btn.ghost { background:transparent; color:var(--text-3); }
   .c-btn.ghost:hover { background:var(--bubble); }
   .c-btn.stop { background:var(--text); display:none; }
@@ -161,6 +173,17 @@
   .exp-metrics b { font-size:12.5px; }
   .delta-pos { color:var(--green-dark); } .delta-neg { color:#dc2626; }
   .exp-plain { font-size:12.5px; color:var(--text-3); background:var(--side); border-radius:9px; padding:9px 12px; line-height:1.7; }
+  /* 系统健康分卡（效果评估视图）：分数 + 构成明细 + 版本对比趋势 */
+  .health-card { display:flex; align-items:center; gap:16px; border:1px solid var(--border); border-radius:14px; padding:13px 16px; margin-bottom:12px; animation:fadein .25s; }
+  .health-card .hs { font-size:30px; font-weight:700; letter-spacing:-1px; min-width:52px; text-align:center; }
+  .health-card .hs.good { color:var(--green-dark); }
+  .health-card .hs.mid { color:#d97706; }
+  .health-card .hs.bad { color:#dc2626; }
+  .health-card .hc-main { flex:1; min-width:0; }
+  .health-card .hc-title { font-size:12.5px; font-weight:600; margin-bottom:2px; }
+  .health-card .hc-sub { font-size:11.5px; color:var(--text-3); line-height:1.6; }
+  .health-card .hc-trend { font-size:11.5px; text-align:right; color:var(--text-3); white-space:nowrap; }
+  .health-card .hc-trend b.up { color:var(--green-dark); } .health-card .hc-trend b.down { color:#dc2626; }
   .ed-empty { text-align:center; color:var(--text-3); font-size:13px; padding:40px 20px; line-height:2; }
 
   #toast { position:fixed; top:16px; left:50%; transform:translateX(-50%); background:var(--text); color:#fff; border-radius:10px; padding:9px 18px; font-size:13px; display:none; z-index:100; animation:fadein .25s; max-width:88vw; text-align:center; }
@@ -297,6 +320,7 @@
     <div id="chat">
       <div id="welcome">
         <h1>有什么可以帮忙的？</h1>
+        <div class="welcome-sub">交给我的任务会被规划、执行并自动核验交付，完成质量会沉淀为进化证据</div>
         <div class="sug-grid">
           <div class="sug" onclick="quickAsk('创建 notes.txt，写 3 条今日待办，每条一行')"><b>写点东西</b><span>创建待办、笔记、文档</span></div>
           <div class="sug" onclick="quickAsk('创建 students.csv（name,age,score 表头加 5 行数据），再创建 analysis.md 报告平均分和最高分学生')"><b>算点东西</b><span>数据文件与真实计算</span></div>
@@ -376,6 +400,7 @@
       <div id="liveView" style="display:none;"></div>
       <div id="evoMain">
       <div class="ed-promote" id="edPromote"></div>
+      <div class="health-card" id="edHealth" style="display:none"></div>
       <div class="stat-grid" id="edStats"></div>
       <div class="ed-actions">
         <button class="btn-main" id="edRunBtn" onclick="runEvolutionNow()">立即触发一次进化实验</button>
@@ -475,6 +500,28 @@
 
   /* ---------- 消息 ---------- */
   function scrollBottom(){ const b=$('chat'); if (b.scrollHeight - b.scrollTop - b.clientHeight < 400) b.scrollTop = b.scrollHeight; }
+  // 代码块复制按钮：MutationObserver 监听消息区新增的 pre（流式渲染/历史恢复/最终回答统一覆盖），
+  // 避免在多条渲染路径里重复注入；点击走事件委托复制纯文本
+  const codeObserver = new MutationObserver(muts => {
+    for (const m of muts) for (const n of m.addedNodes) {
+      if (n.nodeType !== 1) continue;
+      const scope = n.tagName === 'PRE' ? [n] : (n.querySelectorAll ? n.querySelectorAll('pre') : []);
+      scope.forEach(decoratePre);
+    }
+  });
+  function decoratePre(pre) {
+    if (pre.dataset.deco) return;
+    pre.dataset.deco = '1';
+    const btn = document.createElement('button');
+    btn.className = 'copy-btn'; btn.type = 'button'; btn.textContent = '复制';
+    btn.addEventListener('click', () => {
+      navigator.clipboard.writeText(pre.innerText).then(() => {
+        btn.textContent = '已复制'; setTimeout(() => { btn.textContent = '复制'; }, 1500);
+      }).catch(() => { btn.textContent = '复制失败'; setTimeout(() => { btn.textContent = '复制'; }, 1500); });
+    });
+    pre.appendChild(btn);
+  }
+  try { codeObserver.observe($('msgs'), { childList:true, subtree:true }); } catch {}
   function showChat(welcome) { $('welcome').style.display = welcome ? '' : 'none'; $('msgs').style.display = welcome ? 'none' : 'flex'; }
   function addMsg(cls, html) {
     showChat(false);
@@ -760,6 +807,26 @@
       <div class="stat"><b>${benchmarks}</b><span>进化样本</span></div>
       <div class="stat"><b>${h.length}</b><span>实验次数</span></div>
       <div class="stat"><b style="color:${promoted?'var(--green)':'inherit'}">${promoted}</b><span>成功进化</span></div>`;
+    // 系统健康分卡：效果评估视图——分数语义（≥80 绿 / 60-79 黄 / <60 红）+ 构成 + 版本对比
+    const hc = $('edHealth');
+    if (st.health && typeof st.health.score === 'number') {
+      const h = st.health;
+      hc.style.display = 'flex';
+      const cls = h.score >= 80 ? 'good' : (h.score >= 60 ? 'mid' : 'bad');
+      const trend = Array.isArray(st.healthTrend) && st.healthTrend.length >= 2
+        ? (() => {
+            const cur = st.healthTrend[st.healthTrend.length - 1], prev = st.healthTrend[st.healthTrend.length - 2];
+            const d = (cur.score || 0) - (prev.score || 0);
+            const dTxt = d > 0 ? `<b class="up">↑ v${prev.version}→v${cur.version} +${d}</b>` : (d < 0 ? `<b class="down">↓ v${prev.version}→v${cur.version} ${d}</b>` : `v${prev.version}→v${cur.version} 持平`);
+            return `<div class="hc-trend">${dTxt}<br>进化前后对比</div>`;
+          })()
+        : '<div class="hc-trend">暂无版本对比<br>（需跨版本数据）</div>';
+      hc.innerHTML = `<div class="hs ${cls}">${h.score}</div>
+        <div class="hc-main">
+          <div class="hc-title">系统健康分 · 最近 ${h.n} 个任务</div>
+          <div class="hc-sub">一次通过 ${Math.round(h.firstPass*100)}% · 返修后通过 ${Math.round(h.fixed*100)}% · 失败 ${Math.round(h.failed*100)}% · 用户撤回/停止 ${Math.round((h.aborted+h.undone)*100)}%</div>
+        </div>${trend}`;
+    } else { hc.style.display = 'none'; }
     // 攒批进度（多次聊天合并分析）：展示距下次自动实验还差几个新任务
     if (typeof st.newSinceLastExp === 'number' && st.newSinceLastExp !== null && isFinite(st.newSinceLastExp)) {
       const need = Number(st.minNewCases)||3, have = st.newSinceLastExp;

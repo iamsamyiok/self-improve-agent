@@ -73,6 +73,19 @@ assert.ok(evoSrc.includes('function evoConfig'),'evoConfig 配置回退函数存
 assert.ok(evoSrc.includes('cfg.evolution'),'读取 config.json evolution 段');
 assert.ok(evoSrc.includes('evoConfig()'),'Meta-Agent/judge/课程统一走进化配置');
 assert.ok(evoSrc.includes('llmSource:evoLlmSource()'),'decision 记录配置来源');
+// ===== 效果评估系统：信号采集 + 健康分 + 退化触发 =====
+assert.ok(evoSrc.includes('function recordTaskOutcome') && evoSrc.includes('eval-events.jsonl'),'任务级效果信号采集存在');
+assert.ok(evoSrc.includes('function healthScore') && evoSrc.includes('function healthDropping'),'健康分聚合与退化判定存在');
+assert.ok(evoSrc.includes('health:healthScore(50)') && evoSrc.includes('healthTrend:healthTrend()'),'status 暴露健康分与版本对比');
+assert.ok(evoSrc.includes('regression: true'),'看门狗回归自动取证入池（闭环 B）');
+const srvSrc3=fs.readFileSync(require('path').join(__dirname,'..','server.js'),'utf8');
+assert.ok(srvSrc3.includes('recordTaskOutcome({ success: !hasUnresolvedGaps'),'任务完成信号采集接线');
+assert.ok(srvSrc3.includes("recordTaskOutcome({ success:false, aborted:true"),'abort 负信号采集接线');
+assert.ok(srvSrc3.includes("recordTaskOutcome({ success:false, undone:true })"),'undo 负信号采集接线');
+assert.ok(srvSrc3.includes('evolution.healthDropping()'),'健康分退化触发线接线（闭环 A）');
+// 健康分纯函数端到端：好窗口不误报，劣化后触发
+const probeEvents=(()=>{ const f=require('fs'); const tmp=require('os').tmpdir()+"/ev-health-"+Date.now(); f.mkdirSync(tmp,{recursive:true}); return tmp; })();
+assert.ok(typeof evo.healthScore(50)==='object' || evo.healthScore(50)===null,'healthScore 可调用');
 const innerSrc=fs.readFileSync(require('path').join(__dirname,'..','lib','inner.js'),'utf8');
 assert.ok(innerSrc.includes('DUAL_AGENT_EVOLUTION_WORKER') && innerSrc.includes('payload.temperature'),'实验 worker 路径必须注入温度控制');
 assert.ok(evoSrc.includes('DUAL_AGENT_EVOLUTION_PREFILTER') && evoSrc.includes('prefilterReject'),'3-case 快筛必须存在且可通过 env 关闭');

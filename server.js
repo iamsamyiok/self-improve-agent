@@ -597,10 +597,14 @@ const { matchSmallTalk } = require('./lib/smalltalk');
  async function handleInnerChat(req, res, preBody, fromQueue) {
  const body = preBody !== undefined ? preBody : await readBody(req);
  const message = String(body.message || '').trim();
+ // 效果评估：任务级计时起点（完成/错误/abort 三处统一落 eval-events）
+ const taskT0 = Date.now();
  // P1 停止确认：前端 abort 时返回 {type:'stopped'}，让 UI 展示"已确认停止"而非猜测
  req.on('abort', () => {
    try { res.write(`data: ${JSON.stringify({ type: 'stopped' })}\n\n`); } catch {}
    try { res.end(); } catch {}
+   // 效果评估：用户主动停止 = 负信号（健康分 12 分的「无中断」组成部分）
+   try { require('./lib/evolution').recordTaskOutcome({ success:false, aborted:true, durationMs: Date.now() - taskT0, task: message }); } catch {}
    innerLock = false;
    drainInnerQueue();
  });
@@ -1088,10 +1092,12 @@ const { matchSmallTalk } = require('./lib/smalltalk');
       // 成功任务自动进入 Evolution Benchmark Ledger（与 TUI 同一套账本）；
       // 返修后 PASS 的标记 hard 难例；上限仍未过的只进缺口经验池。
       // 这里只记录任务与可观测产出，真正的评分必须在未来 replay 时重新执行。
-      const hasUnresolvedGaps = String(lastAnswer).includes('[交付核验缺口标注]');
-      try {
-        const evolution = require('./lib/evolution');
-        const intent = getCurrentIntent();
+       const hasUnresolvedGaps = String(lastAnswer).includes('[交付核验缺口标注]');
+       try {
+         const evolution = require('./lib/evolution');
+         // 效果评估：任务完成信号（success=验收闭环通过；repairs>0 即 hard 难例）
+         evolution.recordTaskOutcome({ success: !hasUnresolvedGaps, repairs: repairCount, hard: repairCount > 0, durationMs: Date.now() - taskT0, task: message });
+         const intent = getCurrentIntent();
         if (!hasUnresolvedGaps) {
           // 返修后最终 PASS 的任务是最有价值的难例：repairs>0 会被标记 hard，进化时优先重放
           evolution.recordBenchmark({ task: message, finalText: lastAnswer, ws: currentWorkspace(), intent, artifacts: evolution.artifactManifest(WS_DIR), repairs: repairCount, lastGaps: [], allGaps: gapsSeen.slice(0, 8) });
@@ -1103,9 +1109,12 @@ const { matchSmallTalk } = require('./lib/smalltalk');
         // 真正的自进化：任务完成只产生经验，异步启动 Evolution Engine（后台 A/B 实验），
         // Engine 自己负责 candidate sandbox、统计门槛、regression 与 promote。
         // 攒批触发：自上次实验完成以来新 benchmark ≥ MIN_NEW_CASES（默认 3）才自动触发——
-        // 多次聊天的任务合并成一批统一分析，避免每个任务都单独跑一轮小实验
+        // 多次聊天的任务合并成一批统一分析，避免每个任务都单独跑一轮小实验。
+        // 退化触发线（效果评估闭环 A）：健康分相邻半窗跌幅超阈值时跳过攒批门槛立即实验——
+        // 评估发现问题 → 进化自动响应，失败模式分析保证 mutation 靶向真实短板
         if (evolution.shouldAutoEvolve() && process.env.DUAL_AGENT_EVOLUTION_WORKER !== '1'
-            && evolution.newBenchmarksSinceLastExp() >= (Number(process.env.DUAL_AGENT_EVOLUTION_MIN_NEW_CASES) || 3)) {
+            && (evolution.newBenchmarksSinceLastExp() >= (Number(process.env.DUAL_AGENT_EVOLUTION_MIN_NEW_CASES) || 3)
+                || evolution.healthDropping())) {
           process.env.DUAL_AGENT_EVOLUTION_RUNNING = '1';
           setImmediate(() => require('./lib/evolution').runEvolution({ promote: process.env.DUAL_AGENT_AUTO_PROMOTE !== '0' })
             .catch((e) => console.error('[evolution] 自动进化失败:', (e && e.message) || e))
@@ -1118,6 +1127,8 @@ const { matchSmallTalk } = require('./lib/smalltalk');
     send({ type: 'done' });
  } catch (e) {
    appendProcess(`\n### ${fmtClock(Date.now())} ❌ 错误\n\n${String((e && e.message) || e)}\n`);
+   // 效果评估：任务级异常 = 失败信号（区别于验收缺口的 success:false）
+   try { require('./lib/evolution').recordTaskOutcome({ success:false, durationMs: Date.now() - taskT0, task: message }); } catch {}
    send({ type: 'error', content: String((e && e.message) || e) });
    send({ type: 'done' });
  } finally {
@@ -1558,6 +1569,8 @@ const server = http.createServer(async (req, res) => {
       }
       persistInnerMessages();
       loadInnerMessages(); // 重新加载到当前内存（persistInnerMessages 写磁盘后 reload 到内存）
+      // 效果评估：用户撤回 = 对上一轮交付的否定信号（健康分「无用户中断」组成部分）
+      if (removed > 0) { try { require('./lib/evolution').recordTaskOutcome({ success:false, undone:true }); } catch {} }
       json(res, 200, { success: true, removed, messages: innerMessages.filter(m => m.role !== 'system').slice(-60) });
       return;
     }

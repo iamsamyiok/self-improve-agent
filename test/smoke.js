@@ -2308,6 +2308,15 @@ async function main() {
     assert.ok(html.includes("payload.evolution"), '保存时提交 evolution 段');
     assert.ok(html.includes("srcEl.id = 'edLlmSrc'"), '进化抽屉 llmSource 展示存在');
   });
+  await t('效果评估：健康分卡与采集接线静态断言', () => {
+    const html = fs.readFileSync(path.join(ROOT, 'public', 'index.html'), 'utf8');
+    assert.ok(html.includes('id="edHealth"'), '健康分卡片存在');
+    assert.ok(html.includes('系统健康分'), '健康分标题存在');
+    assert.ok(html.includes('hc-trend'), '版本对比趋势展示存在');
+    const srv = fs.readFileSync(path.join(ROOT, 'server.js'), 'utf8');
+    assert.ok(srv.includes('taskT0'), '任务计时起点存在');
+    assert.ok(srv.includes('healthDropping()'), '退化触发线接入自动进化');
+  });
 
   srv.kill();
   console.log(`\n结果：${passed} 通过，${failed} 失败`);
