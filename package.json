@@ -1,10 +1,10 @@
 {
-  "name": "hwj-agent",
+  "name": "hwj",
   "version": "3.1.0",
-  "description": "HWJ Agent — Inner Agent 工作台 + 后台 Self-Improving Agent Loop + 用户中心进化史",
+  "description": "HWJ — Self-Improving Agent：安装即用的个人 AI Agent（Web/TUI + 交付核验 + 进化闭环）",
   "main": "index.js",
   "bin": {
-    "hwj-agent": "bin/hwj.js"
+    "hwj": "bin/hwj.js"
   },
   "files": [
     "index.js",
@@ -14,6 +14,8 @@
     "bin/",
     "public/",
     "server.js",
+    "skills/",
+    "tools/",
     "hwj.command",
     "hwj.bat",
     "install.bat",

@@ -17,22 +17,22 @@ const PROBE_JS = path.join(ROOT, 'tools', 'probe.js');
 process.on('SIGINT', () => {});
 
 const HELP = [
-  `hwj-agent ${PKG.version} — 双层 Agent 自迭代系统（统一入口）`,
+  `hwj ${PKG.version} — 双层 Agent 自迭代系统（统一入口）`,
   '',
-  '用法：hwj-agent [命令] [参数]',
+  '用法：hwj [命令] [参数]',
   '',
-  '  hwj-agent              检测配置（未配置/无效则打开网页配置页），就绪后选 TUI 或 GUI',
-  '  hwj-agent tui [--ws 名称] 终端交互界面（--ws 指定工作区）',
-  '  hwj-agent gui          启动 Web 界面（自动挑端口 3788-3796；已在跑则直接开浏览器）',
-  '  hwj-agent run [选项] 提示词 非交互执行单次任务，输出过程与结果（退出码 0/1）',
-  '  hwj-agent evolve [--promote] [--cases N] 运行一次 Self-Improving Agent 实验闭环',
+  '  hwj              检测配置（未配置/无效则打开网页配置页），就绪后选 TUI 或 GUI',
+  '  hwj tui [--ws 名称] 终端交互界面（--ws 指定工作区）',
+  '  hwj gui          启动 Web 界面（自动挑端口 3788-3796；已在跑则直接开浏览器）',
+  '  hwj run [选项] 提示词 非交互执行单次任务，输出过程与结果（退出码 0/1）',
+  '  hwj evolve [--promote] [--cases N] 运行一次 Self-Improving Agent 实验闭环',
   '    --ws 名称            指定工作区（默认 default，与 tui/网页版共享会话）',
   '    -q, --quiet          只输出最终结果（适合脚本/管道调用）',
-  '    提示词为 -           从 stdin 读取（echo 任务 | hwj-agent run -）',
-  '  hwj-agent install      安装 hwj 短命令到 PATH（Windows: WindowsApps；macOS/Linux: ~/.local/bin）',
-  '  hwj-agent uninstall    从 PATH 移除 hwj 短命令',
-  '  hwj-agent version      显示版本',
-  '  hwj-agent help         显示本帮助',
+  '    提示词为 -           从 stdin 读取（echo 任务 | hwj run -）',
+  '  hwj install      安装 hwj 短命令到 PATH（Windows: WindowsApps；macOS/Linux: ~/.local/bin）',
+  '  hwj uninstall    从 PATH 移除 hwj 短命令',
+  '  hwj version      显示版本',
+  '  hwj help         显示本帮助',
   '',
   '环境变量：DUAL_AGENT_MOCK=1 演示模式；DUAL_AGENT_PORT=gui 起始端口；',
   'DUAL_AGENT_DATA / DUAL_AGENT_WS_ROOT 数据与工作区根（测试隔离用）',
@@ -40,9 +40,9 @@ const HELP = [
 
 function die(msg, code = 1) { process.stderr.write(`hwj: ${msg}\n`); process.exit(code); }
 
-// 前台运行子进程（stdio 继承：TUI/raw mode/颜色全兼容），退出码透传
+// 前台运行子进程（stdio 继承：TUI/raw mode/颜色全兼容），退出码透传；env 注入 npm 数据目录
 function runSync(file, args, opts = {}) {
-  const r = spawnSync(process.execPath, [file, ...args], { stdio: 'inherit', cwd: ROOT, ...opts });
+  const r = spawnSync(process.execPath, [file, ...args], { stdio: 'inherit', cwd: ROOT, env: dataEnv(), ...opts });
   if (r.error) die(r.error.message);
   if (r.status === null) process.exit(r.signal === 'SIGINT' ? 130 : 1); // Ctrl+C 终止子进程
   process.exit(r.status);
@@ -60,7 +60,7 @@ function openBrowser(url) {
 
 // Web 版：挑空闲端口起服务（与 start.bat 同逻辑：free → 起服务；ours → 开浏览器复用）
 function cmdGui() {
-  const env = { ...process.env, NO_PROXY: 'localhost,127.0.0.1', HTTP_PROXY: '', HTTPS_PROXY: '', http_proxy: '', https_proxy: '' };
+  const env = { ...dataEnv(), NO_PROXY: 'localhost,127.0.0.1', HTTP_PROXY: '', HTTPS_PROXY: '', http_proxy: '', https_proxy: '' };
   const start = Number(process.env.DUAL_AGENT_PORT) || 3788;
   for (let p = start; p < start + 9; p++) {
     const free = spawnSync(process.execPath, [PROBE_JS, String(p), 'free'], { stdio: 'ignore' }).status === 0;
@@ -194,8 +194,16 @@ function cmdTempNote() {
 }
 
 // ---------- 默认入口流程（v1.1.2）：检测配置 → 有效则选 TUI/GUI，无效/未配置则开网页配置页 ----------
-// 数据目录与 core/server 同源：DUAL_AGENT_DATA 可覆盖（测试隔离）
-function dataDir() { return process.env.DUAL_AGENT_DATA || path.join(ROOT, '.data'); }
+// 数据目录与 core/server 同源：DUAL_AGENT_DATA 可覆盖（测试隔离）。
+// npm 安装场景（包位于 node_modules 内）：包目录会随升级被清空，数据默认迁移到 ~/.hwj/，
+// 并通过环境变量传给 server/tui 子进程（三方同源，配置一次全端生效）。
+const IN_NPM = __dirname.includes(`${path.sep}node_modules${path.sep}`);
+function dataEnv() {
+  if (process.env.DUAL_AGENT_DATA || !IN_NPM) return process.env;
+  const base = path.join(os.homedir(), '.hwj');
+  return { ...process.env, DUAL_AGENT_DATA: path.join(base, 'data'), DUAL_AGENT_WS_ROOT: path.join(base, 'workspaces') };
+}
+function dataDir() { return dataEnv().DUAL_AGENT_DATA || path.join(ROOT, '.data'); }
 function readInnerConfig() {
   try {
     const cfg = JSON.parse(fs.readFileSync(path.join(dataDir(), 'config.json'), 'utf8'));
@@ -227,7 +235,7 @@ function openConfigWeb() {
   const start = Number(process.env.DUAL_AGENT_PORT) || 3788;
   for (let p = start; p < start + 9; p++) {
     if (!tryPort(p)) continue;
-    const env = { ...process.env, NO_PROXY: 'localhost,127.0.0.1', HTTP_PROXY: '', HTTPS_PROXY: '', http_proxy: '', https_proxy: '' };
+    const env = { ...dataEnv(), NO_PROXY: 'localhost,127.0.0.1', HTTP_PROXY: '', HTTPS_PROXY: '', http_proxy: '', https_proxy: '' };
     spawn(process.execPath, [SERVER_JS, '--port', String(p)], { detached: true, stdio: 'ignore', env, cwd: ROOT }).unref();
     const url = `http://localhost:${p}/`;
     try {
@@ -256,20 +264,20 @@ async function cmdDefault(rest) {
     const inner = readInnerConfig();
     const complete = !!(inner.base_url && inner.api_key && inner.model);
     if (!complete) {
-      process.stdout.write('\n[hwj-agent] 尚未配置 API（Base URL / API Key / 模型名）\n');
+      process.stdout.write('\n[hwj] 尚未配置 API（Base URL / API Key / 模型名）\n');
     } else {
-      process.stdout.write(`[hwj-agent] 检测 API 有效性：${inner.model} @ ${inner.base_url} ... `);
+      process.stdout.write(`[hwj] 检测 API 有效性：${inner.model} @ ${inner.base_url} ... `);
       const v = await checkApiValid(inner);
       process.stdout.write(v.ok ? '有效\n' : `无效（${v.reason}）\n`);
       if (v.ok) return await chooseAndRun(rest);
-      process.stdout.write('[hwj-agent] 请检查 API 配置（Key 过期/地址错误/服务未启动都会导致检测失败）\n');
+      process.stdout.write('[hwj] 请检查 API 配置（Key 过期/地址错误/服务未启动都会导致检测失败）\n');
     }
     if (!webUrl) {
       webUrl = openConfigWeb();
-      if (webUrl) process.stdout.write(`[hwj-agent] 配置页已打开：${webUrl}（右上角「设置」填写并保存）\n`);
-      else process.stdout.write('[hwj-agent] 端口 3788-3796 被占用，无法打开配置页——可运行 hwj-agent gui 手动处理\n');
+      if (webUrl) process.stdout.write(`[hwj] 配置页已打开：${webUrl}（右上角「设置」填写并保存）\n`);
+      else process.stdout.write('[hwj] 端口 3788-3796 被占用，无法打开配置页——可运行 hwj gui 手动处理\n');
     }
-    if (!process.stdin.isTTY) { process.stdout.write('[hwj-agent] 非交互环境：配置完成后重新运行 hwj-agent\n'); process.exit(1); }
+    if (!process.stdin.isTTY) { process.stdout.write('[hwj] 非交互环境：配置完成后重新运行 hwj\n'); process.exit(1); }
     const a = await askOnce('完成配置并保存后按回车重新检测（t=跳过检测直接进终端 q=退出）：');
     if (a === 'q') process.exit(0);
     if (a === 't') return await chooseAndRun(rest);
@@ -299,6 +307,6 @@ switch (sub) {
   case '_temphint': cmdTempHint(); break;
   case '_tempnote': cmdTempNote(); break;
   case 'help': case '--help': case '-h': process.stdout.write(HELP + '\n'); break;
-  case 'version': case '--version': case '-v': process.stdout.write(`hwj-agent ${PKG.version}\n`); break;
-  default: die(`未知命令：${sub}（hwj-agent help 查看用法）`, 2);
+  case 'version': case '--version': case '-v': process.stdout.write(`hwj ${PKG.version}\n`); break;
+  default: die(`未知命令：${sub}（hwj help 查看用法）`, 2);
 }
