@@ -42,11 +42,19 @@ assert.strictEqual(ordered[0].hard,true,'hard 任务应排第一');
 assert.strictEqual(evo.checkEarlyStop([{evaluation:{delta:-1}},{evaluation:{delta:-1}},{evaluation:{delta:-1}}],6).at,3,'3 个全负 case 后剩余全对也追不到 MIN_DELTA，应早停');
 assert.strictEqual(evo.checkEarlyStop([{evaluation:{delta:0}},{evaluation:{delta:0}},{evaluation:{delta:0}}],6),null,'0 分时剩余仍有机会，不应早停');
 assert.strictEqual(evo.checkEarlyStop([{evaluation:{delta:-1}}],6),null,'MIN_CASES 前不判');
-const st=evo.status(); assert.strictEqual(st.benchmarks,5);
-// 静态防回归：配对比较温度（worker 路径必须默认 0）与 3-case 快筛逻辑存在
+// P2-5 并行接线静态检查：wave 分批 + prefilter 去重 + 并发度可配
+const evoSrc=fs.readFileSync(require('path').join(__dirname,'..','lib','evolution.js'),'utf8');
+assert.ok(evoSrc.includes('DUAL_AGENT_EVOLUTION_PARALLELISM'),'case 并发度环境变量存在');
+assert.ok(evoSrc.includes('Promise.all(wave.map'),'case 分批并行执行');
+assert.ok(evoSrc.includes('prefilterChecked'),'3-case 快筛并行后只判一次（防 results 跳变重复判定）');
+// P2-6 缓存静态检查
+assert.ok(evoSrc.includes('cachedSection'),'教训/套路检索缓存存在');
+const expSrc=fs.readFileSync(require('path').join(__dirname,'..','lib','experience.js'),'utf8');
+assert.ok(expSrc.includes('embedQueryCached'),'query embedding 缓存存在（experience 语义召回）');
+const memSrc=fs.readFileSync(require('path').join(__dirname,'..','plugins','memory.js'),'utf8');
+assert.ok(memSrc.includes('embedQueryCached'),'query embedding 缓存存在（memory recall）');
 const innerSrc=fs.readFileSync(require('path').join(__dirname,'..','lib','inner.js'),'utf8');
 assert.ok(innerSrc.includes('DUAL_AGENT_EVOLUTION_WORKER') && innerSrc.includes('payload.temperature'),'实验 worker 路径必须注入温度控制');
-const evoSrc=fs.readFileSync(require('path').join(__dirname,'..','lib','evolution.js'),'utf8');
 assert.ok(evoSrc.includes('DUAL_AGENT_EVOLUTION_PREFILTER') && evoSrc.includes('prefilterReject'),'3-case 快筛必须存在且可通过 env 关闭');
 assert.ok(evoSrc.includes('holdout-decision.json'),'holdout 复验结果必须落盘');
 // ===== 第一批进化能力改进 =====

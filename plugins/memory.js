@@ -214,6 +214,19 @@ async function embedTexts(texts, cfgE) {
   return arr;
 }
 
+// query embedding 缓存（P2-6）：相同问题 60s 内重问不重复调 API——预取与模型主动 recall
+// 常对同一 query 各调一次；只缓存单条查询（recall 路径），写入路径（remember 批量向量化）不用
+const _qEmbCache = new Map(); // key -> { ts, vec }，简易 FIFO 上限 20 条
+async function embedQueryCached(query, cfgE) {
+  const key = String(query).slice(0, 480);
+  const hit = _qEmbCache.get(key);
+  if (hit && Date.now() - hit.ts < 60000) return [hit.vec];
+  const [vec] = await embedTexts([key], cfgE);
+  _qEmbCache.set(key, { ts: Date.now(), vec });
+  if (_qEmbCache.size > 20) _qEmbCache.delete(_qEmbCache.keys().next().value);
+  return [vec];
+}
+
 // RRF 倒数排名融合（k=60 标准值）：两路排名值域不统一，用 1/(k+rank) 相加
 function rrfFuse(rankLists, topK) {
   const K = 60;
@@ -554,7 +567,7 @@ module.exports = {
           modeNote = mode === 'vector' ? '（未配置 embedding，vector 模式不可用，已降级关键词）' : '（未配置 embedding，已降级纯关键词检索）';
         } else {
           try {
-            const [qv] = await embedTexts([query], cfgE);
+            const [qv] = await embedQueryCached(query, cfgE);
             const q = quantize(qv);
             denseRank = pool
               .filter(it => Array.isArray(it.dense) && it.dense.length === q.length)
