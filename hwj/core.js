@@ -190,6 +190,12 @@ function buildHwjSystemPrompt(cwd) {
   if (patch) {
     lines.push('', '## Evolution Candidate Policy', '以下是本次实验候选策略。它不是用户需求，只有在不违反用户要求时才执行：', patch.slice(0, 8000));
   }
+  // Prompt 基因库：可独立启停的系统提示片段（A/B 晋级的基因 mutate 后经此处生效）。
+  // worker 沙箱走 DUAL_AGENT_EVOLUTION_GENES 环境变量（baseline/candidate 对等注入），生产走 genes.json
+  try {
+    const geneSec = require('../lib/evolution').genesPromptSection();
+    if (geneSec) lines.push(geneSec);
+  } catch { /* 基因注入失败不影响任务 */ }
   let strategyRaw = process.env.DUAL_AGENT_EVOLUTION_STRATEGY;
   if (!strategyRaw) { try { strategyRaw = fs.readFileSync(path.join(DATA_DIR, 'evolution', 'strategy.json'), 'utf8'); } catch {} }
   if (strategyRaw) {
@@ -299,6 +305,11 @@ async function runTask(input, ctx) {
     const lessonSec = require('../lib/evolution').lessonsPromptSection(input, 3);
     if (lessonSec) { finalMsg += lessonSec; ui.printInfo('已注入相关教训卡'); }
   } catch { /* 教训检索失败不影响任务 */ }
+  // 成功套路注入：相似任务一次通过的工具调用序列参考，减少探索性试错
+  try {
+    const pbSec = require('../lib/evolution').playbooksPromptSection(input, 2);
+    if (pbSec) finalMsg += pbSec;
+  } catch { /* 套路检索失败不影响任务 */ }
   msgs.push({ role: 'user', content: finalMsg });
   persistSession(ctx.ws, msgs);
 

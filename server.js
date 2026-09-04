@@ -410,10 +410,13 @@ function buildInnerSystemPrompt(cwd) {
   // 技能清单（渐进披露第 1 层）：与 TUI 共用 skill.promptSection，每次任务实时扫描，晋级技能即时可见
   let skillSection = '';
   try { skillSection = require('./plugins/skill').promptSection({ cwd: cwd || WS_DIR }); } catch { /* 扫描失败按无技能处理 */ }
+  // Prompt 基因库：与 core.js 对齐——可独立启停的系统提示片段（A/B 晋级基因经此生效）
+  let geneSection = '';
+  try { geneSection = require('./lib/evolution').genesPromptSection(); } catch { /* 基因注入失败不影响任务 */ }
   return INNER_SYSTEM_PROMPT_BASE
     .replace('{SKILLS}', skillSection)
     .replace('{TODAY}', dateStr)
-    .replace('{FORGE_DIR}', plugins.FORGE_DIR);
+    .replace('{FORGE_DIR}', plugins.FORGE_DIR) + geneSection;
 }
 const INNER_SYSTEM_PROMPT_BASE = [
   '你是内层执行 Agent，通过调用插件完成任务，完成后用简洁中文总结。当前日期：{TODAY}（涉及"最新/近期"的搜索与判断以此为准）。',
@@ -728,6 +731,11 @@ async function handleInnerChat(req, res, preBody, fromQueue) {
     const lessonSec = require('./lib/evolution').lessonsPromptSection(message, 3);
     if (lessonSec) { finalMsg += lessonSec; send({ type: 'info', text: '已注入相关教训卡' }); }
   } catch { /* 教训检索失败不影响任务 */ }
+  // 成功套路注入：与 core.js 同步对齐——相似成功任务的工具调用序列参考
+  try {
+    const pbSec = require('./lib/evolution').playbooksPromptSection(message, 2);
+    if (pbSec) finalMsg += pbSec;
+  } catch { /* 套路检索失败不影响任务 */ }
   innerMessages.push({ role: 'user', content: finalMsg });
  persistInnerMessages();
  // 事件处理器（主/子智能体共用）：过程落盘 + usage 落账 + SSE 透传（子事件带 sub 标记）
