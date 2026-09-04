@@ -226,5 +226,29 @@ assert.strictEqual(JSON.parse(fs.readFileSync(path.join(evo.EV_ROOT,'genes.json'
   assert.ok(kept,'已完成 case 的结果未被重跑覆盖（断点生效）');
   // 攒批计数：实验刚结束 → 新 benchmark 计数 0
   assert.strictEqual(evo.newBenchmarksSinceLastExp(),0,'实验完成后攒批计数应归零');
-  console.log('evolution smoke: ok — benchmark/worker/A-B/evaluator/regression/ledger/genes/objective/failure-modes/playbooks/lessons-promote/resume/batch');
+  // 资产明细：四类资产结构完整（lessons/playbooks/genes/skills 数组）
+  const la=evo.listAssets(8);
+  assert.ok(Array.isArray(la.lessons)&&Array.isArray(la.playbooks)&&Array.isArray(la.genes)&&Array.isArray(la.skills),'listAssets 应返回四类资产数组');
+  assert.ok(la.lessons.length>=1,'教训资产明细应有数据');
+  // 垃圾自动清理：>30 天完结实验清 cases 留 decision；新目录不动；未完结超期整体清
+  const oldExp=path.join(evo.EV_ROOT,'experiments','exp-cleanup-old');
+  const newExp=path.join(evo.EV_ROOT,'experiments','exp-cleanup-new');
+  const staleExp=path.join(evo.EV_ROOT,'experiments','exp-cleanup-stale');
+  fs.mkdirSync(path.join(oldExp,'cases','case-1'),{recursive:true});
+  fs.writeFileSync(path.join(oldExp,'decision.json'),'{}');
+  fs.writeFileSync(path.join(oldExp,'cases','case-1','result.json'),'{}');
+  fs.mkdirSync(path.join(newExp,'cases'),{recursive:true});
+  fs.mkdirSync(staleExp,{recursive:true});
+  const old=Date.now()-31*24*3600*1000;
+  for (const p of [path.join(oldExp,'cases'),staleExp]) fs.utimesSync(p,new Date(old),new Date(old));
+  fs.utimesSync(staleExp,new Date(old),new Date(old));
+  const removed=evo.cleanupStale(30);
+  assert.ok(removed.includes('exp-cleanup-old/cases'),'超期完结实验应清 cases');
+  assert.ok(!fs.existsSync(path.join(oldExp,'cases')),'cases 目录已删');
+  assert.ok(fs.existsSync(path.join(oldExp,'decision.json')),'decision 结论保留');
+  assert.ok(fs.existsSync(path.join(newExp,'cases')),'30 天内新实验不动');
+  assert.ok(!fs.existsSync(staleExp),'超期未完结实验整体清理');
+  assert.ok(removed.includes('exp-cleanup-stale'),'清理清单应包含整体清理项');
+  for (const d of [oldExp,newExp]) fs.rmSync(d,{recursive:true,force:true}); // 测试自清理（staleExp 已被 cleanup 删除）
+  console.log('evolution smoke: ok — benchmark/worker/A-B/evaluator/regression/ledger/genes/objective/failure-modes/playbooks/lessons-promote/resume/batch/assets/cleanup');
 })().catch(e=>{console.error(e);process.exit(1)});

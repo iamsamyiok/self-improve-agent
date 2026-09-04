@@ -1591,6 +1591,11 @@ const server = http.createServer(async (req, res) => {
       json(res, 200, { success:true, history:evo.history(100) });
       return;
     }
+    if (p === '/api/evolution/assets' && req.method === 'GET') {
+      const evo = require('./lib/evolution');
+      json(res, 200, { success:true, ...evo.listAssets(Math.min(50, Number(url.parse(req.url, true).query.limit) || 8)) });
+      return;
+    }
     if (p === '/api/evolution/run' && req.method === 'POST') {
       const body = await readBody(req);
       const evo = require('./lib/evolution');
@@ -1826,6 +1831,12 @@ server.listen(PORT, '127.0.0.1', () => {
   console.log(`工作区: ${currentWorkspace()}（${workspaceDir()}）`);
   if (process.env.DUAL_AGENT_MOCK === '1') console.log('演示模式：内层假 LLM + 外层假 opencode（不依赖真实 API）');
   if (AUTOSTOP) console.log(`全部网页关闭且空闲超 ${Math.round(IDLE_MS / 1000)} 秒后自动退出（DUAL_AGENT_AUTOSTOP=0 可常驻）`);
+  // 垃圾实验痕迹自动清理：启动时 + 每 24h 一轮（>30 天的 cases/run 目录；结论与经验资产永不清）
+  try {
+    const evoClean = require('./lib/evolution');
+    evoClean.cleanupStale();
+    setInterval(() => { try { evoClean.cleanupStale(); } catch (e) { console.error('[cleanup]', (e && e.message) || e); } }, 24 * 60 * 60 * 1000).unref();
+  } catch (e) { console.error('[cleanup] 初始化失败（不影响服务）', (e && e.message) || e); }
   openBrowser(url0);
 });
 

@@ -2316,8 +2316,15 @@ async function main() {
     assert.ok(html.includes('hc-trend'), '版本对比趋势展示存在');
     assert.ok(html.includes('growthLine'), '欢迎页成长统计行存在');
     assert.ok(html.includes('健康 ${st.health.score}'), '顶栏 pill 含健康分');
+    assert.ok(html.includes('资产 ${assetTotal}'), '顶栏 pill 含资产数');
+    assert.ok(html.includes('toggleAssetDetail'), '资产明细点击展开接线存在');
+    assert.ok(html.includes('/api/evolution/assets'), '资产明细 API 调用存在');
+    assert.ok(html.includes('经验资产 ▾'), '资产格可点击标识存在');
     assert.ok(html.includes('经验资产'), '抽屉经验资产格存在');
     const srv = fs.readFileSync(path.join(ROOT, 'server.js'), 'utf8');
+    assert.ok(srv.includes("'/api/evolution/assets'"), '资产明细路由存在');
+    assert.ok(srv.includes('cleanupStale()'), '启动时垃圾清理接线存在');
+    assert.ok(srv.includes("setInterval(() => { try { evoClean.cleanupStale(); }"), '每日定时清理接线存在');
     assert.ok(srv.includes('taskT0'), '任务计时起点存在');
     assert.ok(srv.includes('healthDropping()'), '退化触发线接入自动进化');
   });

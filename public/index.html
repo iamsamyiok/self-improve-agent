@@ -153,6 +153,18 @@
   .ed-promote b { font-size:14.5px; }
   .stat-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-bottom:16px; }
   .stat { background:var(--side); border-radius:var(--radius); padding:11px 8px; text-align:center; }
+  .stat-click { cursor:pointer; transition:background .15s; }
+  .stat-click:hover { background:var(--brand-light); }
+  .asset-detail { margin-top:10px; max-height:300px; overflow-y:auto; }
+  .ad-loading { font-size:12px; color:var(--text-3); padding:8px 2px; }
+  .ad-sec { margin-bottom:10px; }
+  .ad-title { font-size:11px; font-weight:600; color:var(--text-3); text-transform:uppercase; letter-spacing:.4px; padding:4px 2px; }
+  .ad-item { font-size:12px; padding:6px 8px; border-radius:8px; background:var(--side); margin-bottom:4px; }
+  .ad-item b { display:block; font-size:12px; color:var(--text-1); margin-bottom:2px; }
+  .ad-item span { display:block; font-size:11.5px; color:var(--text-3); line-height:1.45; }
+  .ad-empty { font-size:11.5px; color:var(--text-3); padding:2px; }
+  .ad-on { color:var(--green-dark); font-style:normal; font-weight:600; }
+  .ad-off { color:var(--text-3); font-style:normal; }
   .stat b { display:block; font-size:19px; font-weight:700; letter-spacing:-.3px; }
   .stat span { font-size:10.5px; color:var(--text-3); }
   .ed-actions { display:flex; gap:8px; margin-bottom:20px; }
@@ -751,6 +763,30 @@
   async function refreshEvoSilent(){ try { await renderEvo(true); } catch {} }
   async function refreshEvo(){ await renderEvo(false); }
 
+  // 资产明细面板：点击「经验资产」格展开，展示四类资产的具体内容（最新条目）
+  function toggleAssetDetail(statEl, version, benchmarks, expCount, promoted) {
+    let panel = $('assetDetail');
+    if (panel && panel.dataset.open === '1') { panel.dataset.open = '0'; panel.style.display = 'none'; statEl.querySelector('span').textContent = '经验资产 ▾'; return; }
+    if (!panel) {
+      panel = document.createElement('div');
+      panel.id = 'assetDetail'; panel.className = 'asset-detail';
+      $('edStats').after(panel);
+    }
+    panel.dataset.open = '1'; panel.style.display = 'block';
+    statEl.querySelector('span').textContent = '经验资产 ▴';
+    panel.innerHTML = '<div class="ad-loading">加载中…</div>';
+    api('/api/evolution/assets?limit=8').then(d => {
+      if (!d.success) { panel.innerHTML = '<div class="ad-loading">加载失败</div>'; return; }
+      const sec = (title, items, render) => `<div class="ad-sec"><div class="ad-title">${title}</div>${
+        items.length ? items.map(render).join('') : '<div class="ad-empty">暂无</div>'}</div>`;
+      panel.innerHTML =
+        sec(`经验教训 ${d.lessons.length}`, d.lessons, l => `<div class="ad-item"><b>${esc(l.task) || '（未知任务）'}</b><span>${esc(l.lesson)}</span></div>`) +
+        sec(`执行套路 ${d.playbooks.length}`, d.playbooks, p => `<div class="ad-item"><b>${esc(p.task) || '（未知任务）'}</b><span>工具序列 ${p.steps} 步</span></div>`) +
+        sec(`进化基因 ${d.genes.length}`, d.genes, g => `<div class="ad-item"><b>${g.enabled ? '<i class="ad-on">启用</i>' : '<i class="ad-off">停用</i>'} ${esc(g.text)}</b><span>试用 ${g.stats.trials || 0} · 胜 ${g.stats.wins || 0} · 负 ${g.stats.losses || 0}</span></div>`) +
+        sec(`技能 ${d.skills.length}`, d.skills, s => `<div class="ad-item"><b>${esc(s)}</b><span>技能目录</span></div>`);
+    }).catch(() => { panel.innerHTML = '<div class="ad-loading">加载失败</div>'; });
+  }
+
   async function renderEvo(silent) {
     const st = await api('/api/evolution/status');
     if (!st.success) return;
@@ -758,9 +794,10 @@
     const benchmarks = Number(st.benchmarks)||0, min = Number(st.minBenchmarks)||3;
     const promoted = h.filter(x=>x.promotion&&x.promotion.ok).length;
     const version = state.version || 0;
-    // 顶栏 pill + 侧栏徽标：健康分优先展示（版本外快速表征系统变好），无数据时退回样本数
+    // 顶栏 pill：健康度 + 经验资产两个核心数字（版本/样本/实验细节收进抽屉）
     const healthTxt = (st.health && typeof st.health.score === 'number') ? `健康 ${st.health.score} · ` : '';
-    $('evoPillText').textContent = st.running ? '进化实验进行中' : `${healthTxt}v${version} · 样本 ${benchmarks} · 实验 ${h.length}`;
+    const assetTotal = (st.assets ? (st.assets.lessons || 0) + (st.assets.playbooks || 0) + (st.assets.genes || 0) + (st.assets.skills || 0) : 0);
+    $('evoPillText').textContent = st.running ? '进化实验进行中' : `${healthTxt}资产 ${assetTotal}`;
     $('evoPulse').classList.toggle('live', !!st.running);
     $('navEvoBadge').textContent = 'v' + version;
     $('evoSampleText').textContent = `样本 ${benchmarks}${benchmarks>=min?'（已达标）':''}`;
@@ -771,14 +808,13 @@
     // 抽屉内部
     $('edRunning').classList.toggle('show', !!st.running);
     $('edRunBtn').disabled = !!st.running || !st.autoEvolve;
-    // 经验资产格：替换「当前版本」格（版本号 pill/趋势里都有），版本外的快速成长指标
-    const a = st.assets || {};
-    const assetTotal = (a.lessons || 0) + (a.playbooks || 0) + (a.genes || 0) + (a.skills || 0);
+    // 经验资产格：替换「当前版本」格（版本号 pill/趋势里都有），版本外的快速成长指标；点击展开明细
     $('edStats').innerHTML = `
-      <div class="stat"><b>${assetTotal}</b><span>经验资产</span></div>
+      <div class="stat stat-click" id="statAssets" title="点击查看资产明细"><b>${assetTotal}</b><span>经验资产 ▾</span></div>
       <div class="stat"><b>${benchmarks}</b><span>进化样本</span></div>
       <div class="stat"><b>${h.length}</b><span>实验次数</span></div>
       <div class="stat"><b style="color:${promoted?'var(--green)':'inherit'}">${promoted}</b><span>成功进化</span></div>`;
+    $('statAssets').onclick = () => toggleAssetDetail($('statAssets'), version, benchmarks, h.length, promoted);
     // 欢迎页成长统计行：让「系统越来越好」在主界面可见（随每次任务增长）
     const growth = $('growthLine');
     if (growth) {
