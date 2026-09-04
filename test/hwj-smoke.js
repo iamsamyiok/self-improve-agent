@@ -320,7 +320,7 @@ async function main() {
   await t('调度器：help/version/未知命令退出码', async () => {
     const h = await runDisp(['help']);
     assert.strictEqual(h.code, 0);
-    assert.ok(h.out.includes('hwj-agent run') && h.out.includes('hwj-agent gui') && h.out.includes('install'));
+    assert.ok(h.out.includes('hwjai run') && h.out.includes('hwjai gui') && h.out.includes('install'));
     const v = await runDisp(['version']);
     assert.strictEqual(v.code, 0);
     assert.ok(v.out.includes(PKG.version));

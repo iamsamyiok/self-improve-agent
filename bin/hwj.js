@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-// hwj 统一入口调度器 — tui / gui / run / install / uninstall
+// hwjai 统一入口调度器 — tui / gui / run / install / uninstall
 // 所有路径以仓库根定位（__dirname 推导），与调用者 cwd 无关：安装到 PATH 后任意目录可用。
-// 用法：hwj [tui] [--ws 名称] | hwj gui | hwj run [选项] 提示词 | hwj install | hwj help
+// 用法：hwjai [tui] [--ws 名称] | hwjai gui | hwjai run [选项] 提示词 | hwjai install | hwjai help
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
@@ -17,28 +17,28 @@ const PROBE_JS = path.join(ROOT, 'tools', 'probe.js');
 process.on('SIGINT', () => {});
 
 const HELP = [
-  `hwj ${PKG.version} — 双层 Agent 自迭代系统（统一入口）`,
+  `hwjai ${PKG.version} — 双层 Agent 自迭代系统（统一入口）`,
   '',
-  '用法：hwj [命令] [参数]',
+  '用法：hwjai [命令] [参数]',
   '',
-  '  hwj              检测配置（未配置/无效则打开网页配置页），就绪后选 TUI 或 GUI',
-  '  hwj tui [--ws 名称] 终端交互界面（--ws 指定工作区）',
-  '  hwj gui          启动 Web 界面（自动挑端口 3788-3796；已在跑则直接开浏览器）',
-  '  hwj run [选项] 提示词 非交互执行单次任务，输出过程与结果（退出码 0/1）',
-  '  hwj evolve [--promote] [--cases N] 运行一次 Self-Improving Agent 实验闭环',
+  '  hwjai              检测配置（未配置/无效则打开网页配置页），就绪后选 TUI 或 GUI',
+  '  hwjai tui [--ws 名称] 终端交互界面（--ws 指定工作区）',
+  '  hwjai gui          启动 Web 界面（自动挑端口 3788-3796；已在跑则直接开浏览器）',
+  '  hwjai run [选项] 提示词 非交互执行单次任务，输出过程与结果（退出码 0/1）',
+  '  hwjai evolve [--promote] [--cases N] 运行一次 Self-Improving Agent 实验闭环',
   '    --ws 名称            指定工作区（默认 default，与 tui/网页版共享会话）',
   '    -q, --quiet          只输出最终结果（适合脚本/管道调用）',
-  '    提示词为 -           从 stdin 读取（echo 任务 | hwj run -）',
-  '  hwj install      安装 hwj 短命令到 PATH（Windows: WindowsApps；macOS/Linux: ~/.local/bin）',
-  '  hwj uninstall    从 PATH 移除 hwj 短命令',
-  '  hwj version      显示版本',
-  '  hwj help         显示本帮助',
+  '    提示词为 -           从 stdin 读取（echo 任务 | hwjai run -）',
+  '  hwjai install      安装 hwjai 短命令到 PATH（Windows: WindowsApps；macOS/Linux: ~/.local/bin）',
+  '  hwjai uninstall    从 PATH 移除 hwjai 短命令',
+  '  hwjai version      显示版本',
+  '  hwjai help         显示本帮助',
   '',
   '环境变量：DUAL_AGENT_MOCK=1 演示模式；DUAL_AGENT_PORT=gui 起始端口；',
   'DUAL_AGENT_DATA / DUAL_AGENT_WS_ROOT 数据与工作区根（测试隔离用）',
 ].join('\n');
 
-function die(msg, code = 1) { process.stderr.write(`hwj: ${msg}\n`); process.exit(code); }
+function die(msg, code = 1) { process.stderr.write(`hwjai: ${msg}\n`); process.exit(code); }
 
 // 前台运行子进程（stdio 继承：TUI/raw mode/颜色全兼容），退出码透传；env 注入 npm 数据目录
 function runSync(file, args, opts = {}) {
@@ -65,7 +65,7 @@ function cmdGui() {
   for (let p = start; p < start + 9; p++) {
     const free = spawnSync(process.execPath, [PROBE_JS, String(p), 'free'], { stdio: 'ignore' }).status === 0;
     if (free) {
-      process.stdout.write(`正在启动 hwj Web 版（端口 ${p}，就绪后自动打开浏览器；关闭全部网页约 1 分钟后自动退出，Ctrl+C 立即停止）\n`);
+      process.stdout.write(`正在启动 hwjai Web 版（端口 ${p}，就绪后自动打开浏览器；关闭全部网页约 1 分钟后自动退出，Ctrl+C 立即停止）\n`);
       runSync(SERVER_JS, ['--port', String(p)], { env });
     }
     const ours = spawnSync(process.execPath, [PROBE_JS, String(p), 'ours'], { stdio: 'ignore' }).status === 0;
@@ -75,11 +75,11 @@ function cmdGui() {
 }
 
 function readStdin() {
-  if (process.stdin.isTTY) die('hwj run 需要提示词参数，或用管道：echo 任务 | hwj run -', 2);
+  if (process.stdin.isTTY) die('hwjai run 需要提示词参数，或用管道：echo 任务 | hwjai run -', 2);
   try { return fs.readFileSync(0, 'utf8').trim(); } catch { return ''; }
 }
 
-// 非交互单次任务：hwj run [--ws 名称] [-q] 提示词（提示词为 - 时读 stdin）
+// 非交互单次任务：hwjai run [--ws 名称] [-q] 提示词（提示词为 - 时读 stdin）
 async function cmdEvolve(rest) {
   const evo = require('../lib/evolution');
   const promote = rest.includes('--promote');
@@ -105,7 +105,7 @@ function cmdRun(rest) {
   }
   let prompt = words.join(' ').trim();
   if (prompt === '-') prompt = readStdin();
-  if (!prompt) die('用法：hwj run [--ws 名称] [-q] 提示词（提示词为 - 时读 stdin）', 2);
+  if (!prompt) die('用法：hwjai run [--ws 名称] [-q] 提示词（提示词为 - 时读 stdin）', 2);
   // 注入调用位置：用户在任意目录执行 run 时告知 Agent 实际目录（数据仍集中存安装目录，但任务可定位用户文件）
   const callerCwd = path.resolve(process.cwd());
   if (callerCwd.toLowerCase() !== ROOT.toLowerCase()) {
@@ -120,10 +120,10 @@ function cmdRun(rest) {
 function shimPaths() {
   if (process.platform === 'win32') {
     const dir = path.join(process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local'), 'Microsoft', 'WindowsApps');
-    return { dir, file: path.join(dir, 'hwj.cmd') };
+    return { dir, file: path.join(dir, 'hwjai.cmd') };
   }
   const dir = path.join(os.homedir(), '.local', 'bin');
-  return { dir, file: path.join(dir, 'hwj') };
+  return { dir, file: path.join(dir, 'hwjai') };
 }
 
 function cmdInstall(rest) {
@@ -142,17 +142,17 @@ function cmdInstall(rest) {
   fs.writeFileSync(file, content); // 覆盖旧 shim：重复 install 幂等，仓库换目录后重跑即可
   if (process.platform !== 'win32') { try { fs.chmodSync(file, 0o755); } catch { /* 权限忽略 */ } }
   process.stdout.write(`已安装：${file}\n`);
-  process.stdout.write('现在可在任意目录使用：hwj / hwj tui / hwj gui / hwj run "任务"\n');
+  process.stdout.write('现在可在任意目录使用：hwjai / hwjai tui / hwjai gui / hwjai run "任务"\n');
   if (!onPath) process.stdout.write(`注意：${dir} 不在 PATH 中——请将其加入 PATH 后重开终端使用\n`);
   else process.stdout.write(process.platform === 'win32' ? '（WindowsApps 已在 PATH，已打开的终端立即可用）\n' : '（重开终端或 hash -r 后生效）\n');
-  process.stdout.write('仓库移动/升级到新目录后，请在新目录重跑 hwj install 更新指向\n');
+  process.stdout.write('仓库移动/升级到新目录后，请在新目录重跑 hwjai install 更新指向\n');
 }
 
 function cmdUninstall() {
   const { file } = shimPaths();
   let removed = false;
   try { fs.unlinkSync(file); removed = true; } catch { /* 未安装 */ }
-  process.stdout.write(removed ? `已卸载：${file}（仓库本体未动，双击 hwj.bat/start.bat 仍可用）\n` : '未检测到已安装的 hwj（无需卸载）\n');
+  process.stdout.write(removed ? `已卸载：${file}（仓库本体未动，双击 hwj.bat/start.bat 仍可用）\n` : '未检测到已安装的 hwjai（无需卸载）\n');
 }
 
 // ---------- hwj.bat 双击交互辅助（内部子命令，不进 help） ----------
@@ -161,9 +161,9 @@ function cmdChoose() {
   process.stderr.write([
     '',
     '  ===============================================',
-    '    hwj 终端智能体 — 选择使用方式',
+    '    hwjai 终端智能体 — 选择使用方式',
     '  ===============================================',
-    '   [1] 永久安装（推荐）  装入用户 PATH，之后任意目录可用 hwj 命令',
+    '   [1] 永久安装（推荐）  装入用户 PATH，之后任意目录可用 hwjai 命令',
     '   [2] 临时使用           打开一个专用终端窗口，关窗即失效、不留任何文件',
     '   [3] 直接启动           本次运行终端智能体（不做任何安装）',
     ''
@@ -172,7 +172,7 @@ function cmdChoose() {
     c = String(c).trim();
     if (c === '1' || c === '2' || c === '3') process.stdout.write(c);
     else if (!c) process.stdout.write('1');
-    else { process.stderr.write(`\n[hwj] 无效选择：${c}，请重新输入\n`); process.stdout.write('?'); }
+    else { process.stderr.write(`\n[hwjai] 无效选择：${c}，请重新输入\n`); process.stdout.write('?'); }
   };
   if (!process.stdin.isTTY) { process.stdout.write('1'); return; } // 非交互（管道/受限环境）默认永久安装
   process.stdin.setEncoding('utf8');
@@ -182,15 +182,15 @@ function cmdChoose() {
 function cmdTempHint() {
   process.stdout.write([
     '',
-    '  hwj 临时会话已就绪（仅本窗口可用，关闭窗口即失效）：',
-    '    hwj               终端智能体          hwj gui              Web 界面',
-    '    hwj run "任务"    单次执行            hwj run -q "任务"    仅输出结果',
+    '  hwjai 临时会话已就绪（仅本窗口可用，关闭窗口即失效）：',
+    '    hwjai               终端智能体          hwjai gui              Web 界面',
+    '    hwjai run "任务"    单次执行            hwjai run -q "任务"    仅输出结果',
     '  可先 cd 到你的项目目录再使用；数据集中保存在安装目录（workspaces\\、.data\\）。',
     ''
   ].join('\n') + '\n');
 }
 function cmdTempNote() {
-  process.stdout.write('[hwj] 已打开临时会话窗口：在那个窗口内任意目录可用 hwj 命令，关闭即完全失效。本窗口可以安全关闭。\n');
+  process.stdout.write('[hwjai] 已打开临时会话窗口：在那个窗口内任意目录可用 hwjai 命令，关闭即完全失效。本窗口可以安全关闭。\n');
 }
 
 // ---------- 默认入口流程（v1.1.2）：检测配置 → 有效则选 TUI/GUI，无效/未配置则开网页配置页 ----------
@@ -264,20 +264,20 @@ async function cmdDefault(rest) {
     const inner = readInnerConfig();
     const complete = !!(inner.base_url && inner.api_key && inner.model);
     if (!complete) {
-      process.stdout.write('\n[hwj] 尚未配置 API（Base URL / API Key / 模型名）\n');
+      process.stdout.write('\n[hwjai] 尚未配置 API（Base URL / API Key / 模型名）\n');
     } else {
-      process.stdout.write(`[hwj] 检测 API 有效性：${inner.model} @ ${inner.base_url} ... `);
+      process.stdout.write(`[hwjai] 检测 API 有效性：${inner.model} @ ${inner.base_url} ... `);
       const v = await checkApiValid(inner);
       process.stdout.write(v.ok ? '有效\n' : `无效（${v.reason}）\n`);
       if (v.ok) return await chooseAndRun(rest);
-      process.stdout.write('[hwj] 请检查 API 配置（Key 过期/地址错误/服务未启动都会导致检测失败）\n');
+      process.stdout.write('[hwjai] 请检查 API 配置（Key 过期/地址错误/服务未启动都会导致检测失败）\n');
     }
     if (!webUrl) {
       webUrl = openConfigWeb();
-      if (webUrl) process.stdout.write(`[hwj] 配置页已打开：${webUrl}（右上角「设置」填写并保存）\n`);
-      else process.stdout.write('[hwj] 端口 3788-3796 被占用，无法打开配置页——可运行 hwj gui 手动处理\n');
+      if (webUrl) process.stdout.write(`[hwjai] 配置页已打开：${webUrl}（右上角「设置」填写并保存）\n`);
+      else process.stdout.write('[hwjai] 端口 3788-3796 被占用，无法打开配置页——可运行 hwjai gui 手动处理\n');
     }
-    if (!process.stdin.isTTY) { process.stdout.write('[hwj] 非交互环境：配置完成后重新运行 hwj\n'); process.exit(1); }
+    if (!process.stdin.isTTY) { process.stdout.write('[hwjai] 非交互环境：配置完成后重新运行 hwjai\n'); process.exit(1); }
     const a = await askOnce('完成配置并保存后按回车重新检测（t=跳过检测直接进终端 q=退出）：');
     if (a === 'q') process.exit(0);
     if (a === 't') return await chooseAndRun(rest);
@@ -307,6 +307,6 @@ switch (sub) {
   case '_temphint': cmdTempHint(); break;
   case '_tempnote': cmdTempNote(); break;
   case 'help': case '--help': case '-h': process.stdout.write(HELP + '\n'); break;
-  case 'version': case '--version': case '-v': process.stdout.write(`hwj ${PKG.version}\n`); break;
-  default: die(`未知命令：${sub}（hwj help 查看用法）`, 2);
+  case 'version': case '--version': case '-v': process.stdout.write(`hwjai ${PKG.version}\n`); break;
+  default: die(`未知命令：${sub}（hwjai help 查看用法）`, 2);
 }
