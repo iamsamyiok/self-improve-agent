@@ -917,8 +917,11 @@
     $('evoDotSample').className = 'dot ' + (benchmarks>=min?'ok':'');
     $('evoExpText').textContent = `实验 ${h.length} 次 · 晋级 ${promoted}`;
     $('evoDotExp').className = 'dot ' + (promoted?'ok':'');
-    if (!$('evoDrawer').classList.contains('show')) return;
-    // 抽屉内部
+    // 抽屉内部（v3.4.0 性能：数据快照比对，无变化跳过整块 DOM 重建——此前每 8s 重建 50 张实验卡片）
+    if (!$('evoDrawer').classList.contains('show')) { renderEvo._snap = ''; return; }
+    const snap = JSON.stringify(st);
+    if (snap === renderEvo._snap) return;
+    renderEvo._snap = snap;
     $('edRunning').classList.toggle('show', !!st.running);
     $('edRunBtn').disabled = !!st.running || !st.autoEvolve;
     // 统计格：全部可点击展开明细（资产/样本/实验/晋级）；过期档案只显示标识不展示内容
@@ -1150,7 +1153,8 @@
     bar.innerHTML = '<span class="ic spinner"></span><span>任务执行中（页面刷新恢复）· 完整过程实时记录中</span>';
     $('msgs').appendChild(bar); showChat(false); scrollBottom();
     const timer = setInterval(async () => {
-      try { const s = await api('/api/process'); if (!s.running) { clearInterval(timer); bar.remove(); busy=false; $('input').disabled=false; $('sendBtn').style.display='flex'; $('stopBtn').classList.remove('show'); loadHistory(); refreshEvoSilent(); } } catch {}
+      // v3.4.0：带 mtime 短路——恢复轮询只用 running 状态，未变化时服务端跳过全文件读取传输
+      try { const s = await api('/api/process' + (recoverRunningTask._mt ? '?mtime=' + recoverRunningTask._mt : '')); recoverRunningTask._mt = s.mtime; if (!s.running) { clearInterval(timer); bar.remove(); busy=false; $('input').disabled=false; $('sendBtn').style.display='flex'; $('stopBtn').classList.remove('show'); loadHistory(); refreshEvoSilent(); } } catch {}
     }, 2500);
   }
 

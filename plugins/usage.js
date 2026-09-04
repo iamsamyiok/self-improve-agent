@@ -6,7 +6,14 @@ const path = require('path');
 
 function usageFile(ctx) { return path.join(ctx.cwd, 'inner-usage.json'); }
 
+// 数据源：inner-usage.jsonl（v3.4.0 JSONL 追加写）优先，兼容旧 inner-usage.json 数组格式
 function load(ctx) {
+  try {
+    const jl = usageFile(ctx).replace(/\.json$/, '.jsonl');
+    const rows = fs.readFileSync(jl, 'utf8').split('\n').filter(Boolean)
+      .map(l => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean);
+    if (rows.length) return rows;
+  } catch { /* 无 JSONL 回退旧格式 */ }
   try {
     const d = JSON.parse(fs.readFileSync(usageFile(ctx), 'utf8'));
     return Array.isArray(d) ? d : [];

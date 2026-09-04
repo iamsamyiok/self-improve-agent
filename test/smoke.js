@@ -2401,6 +2401,27 @@ async function main() {
     assert.ok(plugins.includes('16384'), '单条工具输出截断 16K 字符');
   });
 
+  await t('性能：热路径 O(1) 化与轮询短路（v3.4.0 性能批次防回归）', () => {
+    const srv = fs.readFileSync(path.join(ROOT, 'server.js'), 'utf8');
+    // usage 计量：全量读+重写 → JSONL 追加 + 体量裁剪
+    assert.ok(srv.includes('inner-usage.jsonl') && srv.includes('appendFileSync(uf'), 'usage 计量应为 JSONL 追加');
+    // 日志 tee：同步 appendFile → 异步写入流 + 滚动
+    assert.ok(srv.includes('createWriteStream(LOG_PATH') && srv.includes('rotateLogIfNeeded'), 'console.log 应走异步流并带滚动');
+    // 会话索引 mtime 缓存
+    assert.ok(srv.includes('_idxCache'), '会话索引应有 mtime 缓存');
+    // /api/process 轮询短路
+    assert.ok(srv.includes("searchParams.get('mtime')") && srv.includes('changed: false'), '/api/process 应支持 mtime 短路');
+    const evo = fs.readFileSync(path.join(ROOT, 'lib', 'evolution.js'), 'utf8');
+    assert.ok(evo.includes('_statusCache') && evo.includes('< 3000'), 'evolution status 应有 3s TTL 缓存');
+    assert.ok(evo.includes('容量截断挪到 cleanupStale'), 'eval-events 截断应集中在低频清理路径');
+    const inner = fs.readFileSync(path.join(ROOT, 'lib', 'inner.js'), 'utf8');
+    assert.ok(inner.includes('__tokens') && inner.includes('withTokensMemo'), 'token 估算应在 budgetMessages 内 memo 复用');
+    const html = fs.readFileSync(path.join(ROOT, 'public', 'index.html'), 'utf8');
+    assert.ok(html.includes('renderEvo._snap'), 'evolution 抽屉应有数据快照短路');
+    const proc = fs.readFileSync(path.join(ROOT, 'public', 'process.html'), 'utf8');
+    assert.ok(proc.includes('?mtime='), '/process 页轮询应带 mtime 短路');
+  });
+
   await t('效果评估：健康分卡与采集接线静态断言', () => {
     const html = fs.readFileSync(path.join(ROOT, 'public', 'index.html'), 'utf8');
     assert.ok(html.includes('id="edHealth"'), '健康分卡片存在');

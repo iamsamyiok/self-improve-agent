@@ -39,10 +39,24 @@ try {
 }
 
 // ---------- 日志 tee ----------
+// v3.4.0 性能：同步 appendFile 改异步写入流（热路径任何 console.log 都曾是同步盘 IO）；
+// 每小时检查体量，超 16MB 截断尾部 8MB（rotate 关闭重建流，进程内自愈）
 const LOG_PATH = path.join(DATA_DIR, 'server.log');
+const LOG_MAX = 16 * 1024 * 1024;
 try { fs.writeFileSync(LOG_PATH, `=== dual-agent-loop started ${new Date().toISOString()} ===\n`); } catch { /* ignore */ }
+let logStream = fs.createWriteStream(LOG_PATH, { flags: 'a' });
+function rotateLogIfNeeded() {
+  try {
+    if (fs.statSync(LOG_PATH).size <= LOG_MAX) return;
+    logStream.end();
+    const buf = fs.readFileSync(LOG_PATH);
+    fs.writeFileSync(LOG_PATH, buf.subarray(buf.length - LOG_MAX / 2));
+    logStream = fs.createWriteStream(LOG_PATH, { flags: 'a' });
+  } catch { /* rotate 失败下轮再试 */ }
+}
+setInterval(rotateLogIfNeeded, 60 * 60 * 1000).unref();
 const origLog = console.log.bind(console);
-console.log = (...a) => { origLog(...a); try { fs.appendFileSync(LOG_PATH, a.join(' ') + '\n'); } catch { /* ignore */ } };
+console.log = (...a) => { origLog(...a); try { logStream.write(a.join(' ') + '\n'); } catch { /* ignore */ } };
 process.on('uncaughtException', e => console.log('[uncaught]', e && e.stack || e));
 process.on('unhandledRejection', e => console.log('[unhandled]', e && (e.stack || e) || e));
 
@@ -165,7 +179,7 @@ function readProcess() {
 function appendProcess(text) {
   try {
     const fp = processPath();
-    fs.mkdirSync(path.dirname(fp), { recursive: true });
+    if (appendProcess._dir !== fp) { fs.mkdirSync(path.dirname(fp), { recursive: true }); appendProcess._dir = fp; } // 工作区切换时自动重建
     // 体量保护：超过 2MB 保留尾部 1MB（头部旧记录滚动淘汰）
     try {
       const st = fs.statSync(fp);
@@ -222,16 +236,25 @@ function sessionsIndexPath(ws) { return path.join(WS_ROOT, ws || currentWorkspac
 function sessionFilePath(id) { return path.join(sessionsDir(), `${id}.json`); }
 
 // 会话索引读写（损坏自愈：索引坏 → 重建为单会话）
+// v3.4.0 性能：mtime 缓存——persistInnerMessages 单次调用链曾重复读索引 2-4 次（sessionMeta×2 等），
+// 同 mtime 直接复用内存副本；写后立即刷新缓存（单进程写穿安全，多工作区按路径区分）
+let _idxCache = { fp: '', mtime: -1, data: null };
 function loadSessionsIndex() {
   try {
+    const st = fs.statSync(sessionsIndexPath());
+    if (_idxCache.fp === sessionsIndexPath() && _idxCache.mtime === st.mtimeMs && _idxCache.data) return _idxCache.data;
     const idx = JSON.parse(fs.readFileSync(sessionsIndexPath(), 'utf8'));
-    if (idx && Array.isArray(idx.list) && idx.list.length && idx.list.some(s => s.id === idx.current)) return idx;
+    if (idx && Array.isArray(idx.list) && idx.list.length && idx.list.some(s => s.id === idx.current)) {
+      _idxCache = { fp: sessionsIndexPath(), mtime: st.mtimeMs, data: idx };
+      return idx;
+    }
   } catch { /* 无索引或损坏 */ }
   return null;
 }
 function saveSessionsIndex(idx) {
   fs.mkdirSync(path.dirname(sessionsIndexPath()), { recursive: true });
   fs.writeFileSync(sessionsIndexPath(), JSON.stringify(idx, null, 1), 'utf8');
+  try { _idxCache = { fp: sessionsIndexPath(), mtime: fs.statSync(sessionsIndexPath()).mtimeMs, data: idx }; } catch { /* 缓存失败下次重读 */ }
 }
 function sessionMeta() {
   const idx = loadSessionsIndex();
@@ -812,14 +835,18 @@ const { matchSmallTalk } = require('./lib/smalltalk');
      appendProcess(`\n### ${fmtClock(Date.now())} ⏳ ${String(ev.text || '')}\n`);
    } else if (ev.type === 'usage') {
      // token 计量落盘：逐轮追加（当轮量 + 会话累计），usage 插件与审计由此取数；子智能体标记 sub
+     // v3.4.0 性能：JSON 数组全量读+重写改为 JSONL 追加（每轮一次 O(1) append），超 512KB 尾部减半
      try {
-       const uf = path.join(WS_DIR, 'inner-usage.json');
-       let rows = [];
-       try { rows = JSON.parse(fs.readFileSync(uf, 'utf8')); } catch { /* 首次 */ }
-       if (!Array.isArray(rows)) rows = [];
-       rows.push({ ts: Date.now(), prompt: ev.last.prompt, completion: ev.last.completion, cached: ev.last.cached, est: !!ev.est, sub: !!ev.sub, profile: ev.tag || 'main',
-         totalsPrompt: ev.totals.prompt, totalsCompletion: ev.totals.completion, totalsCalls: ev.totals.calls });
-       fs.writeFileSync(uf, JSON.stringify(rows, null, 1), 'utf8');
+       const uf = path.join(WS_DIR, 'inner-usage.jsonl');
+       fs.appendFileSync(uf, JSON.stringify({ ts: Date.now(), prompt: ev.last.prompt, completion: ev.last.completion, cached: ev.last.cached, est: !!ev.est, sub: !!ev.sub, profile: ev.tag || 'main',
+         totalsPrompt: ev.totals.prompt, totalsCompletion: ev.totals.completion, totalsCalls: ev.totals.calls }) + '\n', 'utf8');
+       try {
+         const st = fs.statSync(uf);
+         if (st.size > 512 * 1024) {
+           const lines = fs.readFileSync(uf, 'utf8').split('\n').filter(Boolean);
+           fs.writeFileSync(uf, lines.slice(-(lines.length >> 1)).map(l => l + '\n').join(''));
+         }
+       } catch { /* 体量裁剪失败不影响计量 */ }
      } catch { /* 计量落盘失败不阻断会话 */ }
        appendProcess(`\n> 📊 token${ev.sub ? `（子智能体${ev.tag ? '@' + ev.tag : ''}）` : ''}（第 ${ev.totals.calls} 次调用${ev.est ? '，估算' : '，API 真实返回'}）：prompt ${ev.last.prompt} + 输出 ${ev.last.completion}；会话累计 prompt ${ev.totals.prompt} + 输出 ${ev.totals.completion}\n`);
    } else if (ev.type === 'error') {
@@ -1367,6 +1394,7 @@ const server = http.createServer(async (req, res) => {
          for (const ws of listWorkspaces()) {
            const dir = path.join(WS_ROOT, ws);
            rm(path.join(dir, 'inner-messages.json'));
+           rm(path.join(dir, 'inner-usage.jsonl'));
            rm(path.join(dir, 'process.md'));
            rm(path.join(dir, 'inner-usage.json'));
            rm(path.join(dir, 'sessions'));
@@ -1464,10 +1492,17 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     // 过程文件内容（/process 页轮询拉取；执行中任务 mtime 变化时增量刷新）
+    // v3.4.0 性能：带 ?mtime= 参数时先 stat 对比，未变化则跳过全文件读取与传输（执行中每 2.5s 轮询一次，
+    // 过程文件最大 2MB——短路省掉每分钟约 24 次全量读盘+序列化）
     if (p === '/api/process' && req.method === 'GET') {
       let mtime = 0;
       try { mtime = fs.statSync(processPath()).mtimeMs; } catch { /* 无文件 */ }
-      json(res, 200, { success: true, content: readProcess(), path: processPath(), mtime, running: innerLock });
+      const since = Math.floor(Number(new URL(req.url, 'http://localhost').searchParams.get('mtime') || 0));
+      if (since && mtime && mtime <= since) {
+        json(res, 200, { success: true, changed: false, content: '', path: processPath(), mtime, running: innerLock });
+        return;
+      }
+      json(res, 200, { success: true, changed: true, content: readProcess(), path: processPath(), mtime, running: innerLock });
       return;
     }
     if (p === '/api/inner/messages' && req.method === 'GET') {

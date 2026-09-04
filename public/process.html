@@ -100,10 +100,12 @@ window.addEventListener('scroll', () => {
 
 async function tick() {
   try {
-    const r = await fetch('/api/process');
+    // v3.4.0：带上次 mtime 请求，服务端未变化时短路返回（跳过全文件读取与传输）
+    const r = await fetch('/api/process' + (lastMtime ? '?mtime=' + lastMtime : ''));
     const d = await r.json();
     document.getElementById('path').textContent = d.path || '';
-    if (d.mtime !== lastMtime) {
+    if (d.changed === false) { /* 内容未变，仅同步运行状态 */ }
+    else if (d.mtime !== lastMtime) {
       lastMtime = d.mtime;
       const html = render(d.content || '');
       if (html) document.getElementById('content').innerHTML = html;
