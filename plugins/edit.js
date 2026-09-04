@@ -54,6 +54,12 @@ module.exports = {
       // 返回上下文帮助模型定位
       const firstNewline = src.indexOf('\n');
       const context = firstNewline > 0 ? src.slice(0, Math.min(firstNewline, 100)) : src.slice(0, 100);
+      // 黑板文件专用引导：黑板内容每步都在变，edit 凭记忆写 oldText 极易失配（运行数据：单日 6 次），
+      // 直接指路 write 全量重写（黑板已豁免覆盖保护）
+      if (/(^|[\\/])task-state\.md$/.test(fp)) {
+        throw new Error(`在黑板 ${fp} 中未找到要替换的原文。黑板内容每完成一步都会变化，` +
+          `禁止凭记忆 edit——直接用 write 全量重写整个黑板（更新后的完整内容，黑板文件已豁免覆盖保护，无需 confirm）。`);
+      }
       throw new Error(`在 ${fp} 中未找到要替换的原文（找了 ${JSON.stringify(brief)}）。` +
         `文件共 ${src.length} 字符。文件开头内容：${JSON.stringify(context)}。` +
         `请先用 read 重新读取文件，从返回内容中逐字符精确复制 oldText（注意空格缩进与转义），再重试。`);

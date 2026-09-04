@@ -252,7 +252,7 @@ async function runTask(input, ctx) {
       fs.writeFileSync(bb, `# 任务黑板\n\n## 目标\n${String(input).slice(0, 500)}\n\n## 状态\n- [ ] 待更新（执行中每完成一步必须更新本文件）\n\n## 关键发现\n（执行中记录）\n`, 'utf8');
       ui.printInfo('已创建任务黑板 task-state.md');
     } catch { /* 黑板预创建失败不影响任务 */ }
-    finalMsg = input + '\n\n[框架提示] 本任务为多步任务，三项纪律：\n1) 开始执行前必须先用 todo 建任务清单（每个步骤一条 todo.add），每完成一步立即 todo.toggle(id=...)，全部完成时清单应全为 [x]。\n2) 收尾前必须用 verify 插件断言每个产出文件（exists + contains 内容特征 + line_count），看到 FAIL 先修复再重验，全 PASS 才能总结。\n3) 黑板纪律：框架已在 ' + WS + '/task-state.md 创建黑板文件（含任务目标），执行中每完成一个步骤必须立即用 write/edit（或 bash 写入同一绝对路径）更新它（勾改状态、记录产出文件路径与关键发现）；框架每轮会把黑板内容注记给你——上下文被折叠后以黑板为准，先看黑板再行动。注意：黑板绝对路径是 ' + WS + '/task-state.md，禁止写到其他目录。';
+    finalMsg = input + '\n\n[框架提示] 本任务为多步任务，三项纪律：\n1) 开始执行前必须先用 todo 建任务清单（每个步骤一条 todo.add），每完成一步立即 todo.toggle(id=...)，全部完成时清单应全为 [x]。\n2) 收尾前必须用 verify 插件断言每个产出文件（exists + contains 内容特征 + line_count），看到 FAIL 先修复再重验，全 PASS 才能总结。\n3) 黑板纪律：框架已在 ' + WS + '/task-state.md 创建黑板文件（含任务目标），执行中每完成一个步骤必须立即更新它（勾改状态、记录产出文件路径与关键发现）。更新方式优先用 write 全量重写整个黑板（黑板文件已豁免覆盖保护，直接重发更新后的完整内容即可）；用 edit 必须先 read 确认最新内容再逐字符复制；框架每轮会把黑板内容注记给你——上下文被折叠后以黑板为准，先看黑板再行动。注意：黑板绝对路径是 ' + WS + '/task-state.md，禁止写到其他目录。';
     ui.printInfo('检测到多步任务，已注入任务清单+产出验证提醒');
   }
   if (isLongFormTask(input)) {

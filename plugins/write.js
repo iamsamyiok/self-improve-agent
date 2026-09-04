@@ -90,11 +90,18 @@ module.exports = {
 
     // ---- 覆盖模式：智能区分「续写误用」与「整体重构」 ----
     if (fs.existsSync(fp)) {
+      // 黑板文件豁免：task-state.md 由框架创建并要求模型每步整体重写（勾改状态/补记发现），
+      // 其"高度重叠的整体覆盖"是设计使然——2026-09-04 运行数据：单日 16 次误拦、每次浪费 1 轮。
+      const isBlackboard = /(^|[\\/])task-state\.md$/.test(fp);
       const old = fs.readFileSync(fp, 'utf8');
       if (old.length >= 200 && old !== body) {
         const sim = similarity(old, body);
         if (sim >= 0.3) {
           // 高度重叠却要整体覆盖 = 典型的「忘记 append 语义」，前文会被静默清掉 → 强拦
+          if (isBlackboard) {
+            atomicWrite(fp, body);
+            return `已更新黑板 ${fp}（${old.length} → ${body.length} 字符，黑板文件整体重写放行，原子写入）`;
+          }
           if (!args.confirm) {
             throw new Error(`拒绝覆盖：${fp} 已有 ${old.length} 字符，与本次内容重叠度 ${(sim * 100).toFixed(0)}%（判定为续写场景）。` +
               `续写请用 append=true 重发本次内容（content 无需改动，加上 append:true 即可）；` +
