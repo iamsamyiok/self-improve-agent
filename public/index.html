@@ -165,6 +165,15 @@
   .ad-empty { font-size:11.5px; color:var(--text-3); padding:2px; }
   .ad-on { color:var(--green-dark); font-style:normal; font-weight:600; }
   .ad-off { color:var(--text-3); font-style:normal; }
+  .scout-head { display:flex; align-items:center; justify-content:space-between; font-size:12px; font-weight:600; color:var(--text-2); padding:10px 2px 2px; }
+  .scout-run { font-size:11px; padding:3px 10px; border:1px solid var(--border); border-radius:999px; background:var(--side); color:var(--green-dark); cursor:pointer; }
+  .scout-run:hover:not(:disabled) { background:var(--green-light); }
+  .scout-run:disabled { opacity:.5; cursor:default; }
+  .scout-progress { font-size:11.5px; color:var(--text-3); padding:2px 2px 6px; }
+  .scout-progress b { color:var(--green-dark); }
+  .scout-item { font-size:11.5px; padding:4px 8px; background:var(--side); border-radius:8px; margin-bottom:3px; display:flex; gap:6px; align-items:baseline; }
+  .scout-item b { color:var(--green-dark); font-weight:600; flex-shrink:0; }
+  .scout-item span { color:var(--text-3); margin-left:auto; flex-shrink:0; }
   .stat b { display:block; font-size:19px; font-weight:700; letter-spacing:-.3px; }
   .stat span { font-size:10.5px; color:var(--text-3); }
   .ed-actions { display:flex; gap:8px; margin-bottom:20px; }
@@ -787,6 +796,39 @@
     }).catch(() => { panel.innerHTML = '<div class="ad-loading">加载失败</div>'; });
   }
 
+  // 外部学习（scout）区块：状态 + 今日进度 + 最近学到的机制 + 手动触发
+  async function renderScout(afterEl) {
+    let el = $('edScout');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'edScout'; el.className = 'ed-sec';
+      afterEl.after(el);
+    }
+    el.innerHTML = '<div style="font-size:12px;color:var(--text-3);padding:6px 2px 0">外部学习：加载中…</div>';
+    try {
+      const s = await api('/api/scout/status');
+      if (!s.success) { el.innerHTML = ''; return; }
+      const recent = (s.recent || []).slice(0, 3).map(r =>
+        `<div class="scout-item"><b>${r.form === 'skill' ? '技能' : r.form === 'gene' ? '基因' : '弃用'}</b> ${esc(String(r.mechanism || '').slice(0, 24))}<span>${esc(String(r.repo || '').replace('github:', ''))}</span></div>`
+      ).join('');
+      el.innerHTML = `
+        <div class="scout-head">
+          <span>外部学习（GitHub 热门 agent 项目）</span>
+          <button class="scout-run" id="scoutRunBtn" ${s.due ? '' : 'disabled'}>${s.due ? '立即学习' : '今日已完成'}</button>
+        </div>
+        <div class="scout-progress">今日资产 <b>${s.todayAssets}/${s.dailyGoal}</b> · 累计技能 ${s.totals.skills} · 待验证基因 ${s.totals.pendingGenes}</div>
+        ${recent || '<div class="scout-item" style="opacity:.7">还没有学习记录</div>'}`;
+      $('scoutRunBtn').onclick = async () => {
+        const btn = $('scoutRunBtn');
+        btn.disabled = true; btn.textContent = '学习中…';
+        const r = await api('/api/scout/run', { method: 'POST' });
+        toast(r.success ? `外部学习完成：${r.assets} 个资产入库` : `学习未完成：${r.error || '已顺延'}`);
+        renderScout(afterEl);
+        renderEvo(true);
+      };
+    } catch { el.innerHTML = ''; }
+  }
+
   async function renderEvo(silent) {
     const st = await api('/api/evolution/status');
     if (!st.success) return;
@@ -878,6 +920,8 @@
       ? '进化 LLM：独立专用 API'
       : '进化 LLM：复用执行 API（可在设置中配置进化专用 API 避免抢配额）';
     const tipNow = $('edBatchTip'); if (tipNow) tipNow.after(srcEl); else $('edStats').after(srcEl);
+    // 外部学习区块：每日从 GitHub 热门 agent 项目学机制 → 迁移为本程序资产（技能/基因）
+    renderScout(srcEl);
     const lastPromote = h.find(x=>x.promotion&&x.promotion.ok);
     if (lastPromote) {
       if (lastPromoteSeen && lastPromote.experiment !== lastPromoteSeen) toast(`版本升级到 v${lastPromote.promotion.version}`);

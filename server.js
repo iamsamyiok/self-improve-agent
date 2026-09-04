@@ -1596,6 +1596,16 @@ const server = http.createServer(async (req, res) => {
       json(res, 200, { success:true, ...evo.listAssets(Math.min(50, Number(url.parse(req.url, true).query.limit) || 8)) });
       return;
     }
+    if (p === '/api/scout/status' && req.method === 'GET') {
+      json(res, 200, require('./lib/scout').scoutStatus());
+      return;
+    }
+    if (p === '/api/scout/run' && req.method === 'POST') {
+      if (innerLock || outerLock) { json(res, 409, { success:false, error:'任务执行中，外部学习已顺延（避免争抢资源）' }); return; }
+      if (process.env.DUAL_AGENT_EVOLUTION_RUNNING === '1' || process.env.DUAL_AGENT_EVOLUTION_WORKER) { json(res, 409, { success:false, error:'进化实验进行中，外部学习已顺延' }); return; }
+      runScoutSafe().then(r => json(res, 200, r)).catch(e => json(res, 500, { success:false, error:String((e && e.message) || e) }));
+      return;
+    }
     if (p === '/api/evolution/run' && req.method === 'POST') {
       const body = await readBody(req);
       const evo = require('./lib/evolution');
@@ -1837,8 +1847,35 @@ server.listen(PORT, '127.0.0.1', () => {
     evoClean.cleanupStale();
     setInterval(() => { try { evoClean.cleanupStale(); } catch (e) { console.error('[cleanup]', (e && e.message) || e); } }, 24 * 60 * 60 * 1000).unref();
   } catch (e) { console.error('[cleanup] 初始化失败（不影响服务）', (e && e.message) || e); }
+  // 外部学习调度：每 30 分钟检查一次——每日目标未达标且距上次成功 ≥24h 且空闲（无任务、无进化实验）才执行
+  try {
+    const scout = require('./lib/scout');
+    setInterval(() => {
+      try {
+        if (!scout.scoutDue()) return;
+        if (innerLock || outerLock) return; // 任务进行中：学习永远给真实任务让路
+        if (process.env.DUAL_AGENT_EVOLUTION_RUNNING === '1' || process.env.DUAL_AGENT_EVOLUTION_WORKER) return;
+        runScoutSafe();
+      } catch (e) { console.error('[scout]', (e && e.message) || e); }
+    }, 30 * 60 * 1000).unref();
+  } catch (e) { console.error('[scout] 初始化失败（不影响服务）', (e && e.message) || e); }
   openBrowser(url0);
 });
+
+// 外部学习执行壳：串行防重入 + 容错（学习失败不影响服务）
+let scoutRunning = false;
+async function runScoutSafe() {
+  if (scoutRunning) return { success: false, error: '外部学习已在进行中' };
+  scoutRunning = true;
+  try {
+    const r = await require('./lib/scout').runScout();
+    console.log(`[scout] 外部学习完成：侦察 ${r.reposScanned} 项目，入库 ${r.assets} 资产（技能 ${r.skills} / 基因 ${r.genes}），拦截 ${r.rejected}`);
+    return r;
+  } catch (e) {
+    console.error('[scout] 外部学习失败（不影响服务）', (e && e.message) || e);
+    return { success: false, error: String((e && e.message) || e) };
+  } finally { scoutRunning = false; }
+}
 
 // 优雅退出：Ctrl+C / 关闭启动窗口；server.close 带 5 秒强制退出兜底（防 keep-alive 连接挂住）
 function shutdown(signal) {

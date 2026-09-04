@@ -2319,10 +2319,15 @@ async function main() {
     assert.ok(html.includes('资产 ${assetTotal}'), '顶栏 pill 含资产数');
     assert.ok(html.includes('toggleAssetDetail'), '资产明细点击展开接线存在');
     assert.ok(html.includes('/api/evolution/assets'), '资产明细 API 调用存在');
-    assert.ok(html.includes('经验资产 ▾'), '资产格可点击标识存在');
-    assert.ok(html.includes('经验资产'), '抽屉经验资产格存在');
+    assert.ok(html.includes('renderScout'), '外部学习区块渲染接线存在');
+    assert.ok(html.includes('/api/scout/status'), '外部学习状态接口调用存在');
+    assert.ok(html.includes('立即学习'), '外部学习手动触发按钮存在');
     const srv = fs.readFileSync(path.join(ROOT, 'server.js'), 'utf8');
     assert.ok(srv.includes("'/api/evolution/assets'"), '资产明细路由存在');
+    assert.ok(srv.includes("'/api/scout/status'"), '外部学习状态路由存在');
+    assert.ok(srv.includes("'/api/scout/run'"), '外部学习手动触发路由存在');
+    assert.ok(srv.includes('scout.scoutDue()'), '空闲调度判定接线存在');
+    assert.ok(srv.includes('runScoutSafe'), '学习执行壳（串行防重入）存在');
     assert.ok(srv.includes('cleanupStale()'), '启动时垃圾清理接线存在');
     assert.ok(srv.includes("setInterval(() => { try { evoClean.cleanupStale(); }"), '每日定时清理接线存在');
     assert.ok(srv.includes('taskT0'), '任务计时起点存在');

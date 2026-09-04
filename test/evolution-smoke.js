@@ -5,6 +5,7 @@ process.env.DUAL_AGENT_MOCK='1';
 process.env.DUAL_AGENT_DATA=path.join(root,'data');
 process.env.DUAL_AGENT_WS_ROOT=path.join(root,'workspaces');
 process.env.DUAL_AGENT_SKILLS_SHARED=path.join(root,'skills');
+process.env.DUAL_AGENT_SCOUT_DAILY_GOAL='3'; // MOCK 端到端恰产 3 资产，达标后 due 应为 false
 fs.mkdirSync(path.join(root,'workspaces','default'),{recursive:true});
 const evo=require('../lib/evolution');
 for(let i=0;i<3;i++) evo.recordBenchmark({task:`evolution smoke task ${i}`,finalText:'完成',ws:'default',intent:{acceptance:['完成任务'],deliverables:[]},artifacts:[]});
@@ -250,5 +251,34 @@ assert.strictEqual(JSON.parse(fs.readFileSync(path.join(evo.EV_ROOT,'genes.json'
   assert.ok(!fs.existsSync(staleExp),'超期未完结实验整体清理');
   assert.ok(removed.includes('exp-cleanup-stale'),'清理清单应包含整体清理项');
   for (const d of [oldExp,newExp]) fs.rmSync(d,{recursive:true,force:true}); // 测试自清理（staleExp 已被 cleanup 删除）
-  console.log('evolution smoke: ok — benchmark/worker/A-B/evaluator/regression/ledger/genes/objective/failure-modes/playbooks/lessons-promote/resume/batch/assets/cleanup');
+  // ===== 外部学习 scout：MOCK 端到端（固定项目/机制卡 → 技能入库 + 基因入池 + 账本 + 调度判定）=====
+  const scout=require('../lib/scout');
+  const rScout=await scout.runScout({});
+  assert.strictEqual(rScout.ok,true);
+  assert.strictEqual(rScout.skills,2,'MOCK 两项目各产 1 技能（同名覆盖）');
+  assert.strictEqual(rScout.genes,1,'MOCK 基因入池 1 条');
+  assert.strictEqual(rScout.assets,3,'每日目标 3：技能 2 + 基因 1，达标即停');
+  assert.strictEqual(rScout.rejected,0,'达标后剩余机制不再处理');
+  const skillDir=path.join(root,'skills','scout-reflection-loop');
+  assert.ok(fs.existsSync(path.join(skillDir,'SKILL.md')),'scout 技能已写入共享技能库');
+  const skillMd=fs.readFileSync(path.join(skillDir,'SKILL.md'),'utf8');
+  assert.ok(skillMd.includes('source: github:mock-agent/'),'技能 frontmatter 应含来源可追溯');
+  assert.ok(skillMd.includes('read'),'适配技能应引用真实工具名（真适用硬校验）');
+  const pending=JSON.parse(fs.readFileSync(path.join(evo.EV_ROOT,'scout','pending-genes.json'),'utf8'));
+  assert.strictEqual(pending.genes.length,1,'pending 基因池应有 1 条');
+  assert.ok(pending.genes[0].source.includes('mock-agent'),'基因应记录来源项目');
+  const mechLines=fs.readFileSync(path.join(evo.EV_ROOT,'scout','mechanisms.jsonl'),'utf8').split('\n').filter(Boolean);
+  assert.strictEqual(mechLines.length,3,'机制账本应记录已处理的 3 次决策（达标即停）');
+  // 硬校验单测：过短/无真实工具名引用的内容必须拦截
+  assert.strictEqual(scout.validateSkill({form:'skill',content:'太短'}),false,'过短内容应拦截');
+  assert.strictEqual(scout.validateSkill({form:'skill',content:'x'.repeat(300)}),false,'无真实工具引用应拦截');
+  assert.strictEqual(scout.validateSkill({form:'skill',content:'用 verify 工具校验交付。'.repeat(20)}),true,'引用真实工具应通过');
+  // pending 基因注入进化 prompt + 验证状态翻转
+  const gsec=scout.pendingGenesPromptSection();
+  assert.ok(gsec.includes('外部学习候选基因') && gsec.includes('mock-agent/alpha'),'gene mutation 上下文应注入候选基因');
+  scout.markGeneValidated(pending.genes[0].id,true);
+  assert.strictEqual(JSON.parse(fs.readFileSync(path.join(evo.EV_ROOT,'scout','pending-genes.json'),'utf8')).genes[0].status,'validated','基因验证后应翻转状态');
+  // 调度判定：今日资产已达目标 → due false；清空 state → due true
+  assert.strictEqual(scout.scoutDue(),false,'今日达标后不应再触发');
+  console.log('evolution smoke: ok — benchmark/worker/A-B/evaluator/regression/ledger/genes/objective/failure-modes/playbooks/lessons-promote/resume/batch/assets/cleanup/scout');
 })().catch(e=>{console.error(e);process.exit(1)});
