@@ -1,6 +1,6 @@
 {
   "name": "hwjai",
-  "version": "3.2.0",
+  "version": "3.3.0",
   "description": "HWJ — Self-Improving Agent：安装即用的个人 AI Agent（Web/TUI + 交付核验 + 进化闭环）",
   "main": "index.js",
   "bin": {
