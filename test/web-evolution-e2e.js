@@ -92,8 +92,9 @@ async function main() {
 
   const web = spawn(process.execPath, [path.join(ROOT, 'server.js'), '--port', String(PORT)], {
     env: { ...process.env, DUAL_AGENT_DATA: DATA, DUAL_AGENT_WS_ROOT: WSROOT, NO_PROXY: 'localhost,127.0.0.1', HTTP_PROXY: '', http_proxy: '' },
-    stdio: 'ignore'
+    stdio: ['ignore','ignore','pipe']
   });
+  web.stderr.on('data', (d) => process.stderr.write('[srv] ' + d.toString()));
   const waitUp = async () => {
     for (let i = 0; i < 40; i++) {
       try { await fetch(`http://127.0.0.1:${PORT}/`); return; } catch { await new Promise((r) => setTimeout(r, 500)); }

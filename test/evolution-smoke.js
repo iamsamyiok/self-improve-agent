@@ -101,6 +101,62 @@ const skillFp=path.join(root,'skills','auto-evolved',path.basename(promotedLog[0
 assert.ok(fs.existsSync(skillFp),'升格技能文件应存在');
 assert.ok(fs.readFileSync(skillFp,'utf8').includes('name: lesson-fix-'),'技能应为标准 frontmatter 格式');
 assert.strictEqual(evo.promoteLessonsToSkill().promoted,0,'已升格教训重复调用应幂等');
+// ===== 2026-09-04 十项优化 =====
+// O2. HTTP 错误统一构造器：500/502/504 瞬态可重试，401/400 确定性不重试
+const { makeHttpError, LlmTimeout, llmTimeoutMs } = require('../lib/llmRetry');
+assert.ok(makeHttpError(500,'boom','T').retryable===true,'500 应可重试');
+assert.ok(makeHttpError(502,'bad gateway','T').retryable===true,'502 应可重试');
+assert.ok(makeHttpError(504,'timeout','T').retryable===true,'504 应可重试');
+assert.strictEqual(makeHttpError(401,'unauthorized','T').retryable,undefined,'401 不应重试');
+assert.strictEqual(makeHttpError(400,'invalid body','T').retryable,undefined,'400 不应重试');
+// O1. 超时控制器：AbortError 转可重试错误
+const toAbort=new Error('aborted'); toAbort.name='AbortError';
+const settledAbort=LlmTimeout.prototype.settle.call({label:'T'},toAbort);
+assert.ok(settledAbort.retryable===true,'AbortError 应转为可重试');
+assert.ok(settledAbort.message.includes('超时'),'超时错误信息应含"超时"');
+const plainErr=LlmTimeout.prototype.settle.call({label:'T'},new Error('普通错误'));
+assert.strictEqual(plainErr.retryable,undefined,'普通错误应原样返回');
+assert.ok(typeof llmTimeoutMs()==='number'&&llmTimeoutMs()>0,'超时阈值应可读且为正数');
+// O3. 失败模式聚类去重：hard 任务同写 gaps+lessons 只计 1 次——
+// 测试池有 2 个相似 hard 任务，去重后 count=2（每任务 1 次）；无双计逻辑时会是 4
+assert.strictEqual(evo.analyzeFailureModes(3)[0].count,2,'同任务双写应去重：2 个 hard 任务计 2 而非 4');
+// O4. 靶向命中判定
+const fm=[{representative:'索引缺少二级条目',count:1,samples:[]}];
+assert.ok(evo.targetsFailureModes({reason:'针对「索引缺少二级条目」强化 verify 断言',change:'x'},fm),'引用模式应命中');
+assert.ok(!evo.targetsFailureModes({reason:'改进搜索关键词策略',change:'x'},fm),'无关文本不应命中');
+// O5. case 内 A/B 并行：静态防回归
+assert.ok(evoSrc.includes('await Promise.all([') && evoSrc.includes("label:'baseline'") && evoSrc.includes("label:'candidate'"),'runCase 内 baseline/candidate 应并行');
+// O6. judge 输入瘦身：静态防回归（slimMetrics + finalText 3000）
+assert.ok(evoSrc.includes('slimMetrics') && evoSrc.includes("slice(0,3000)"),'judge 输入必须瘦身（metrics 聚合 + finalText 3000）');
+// O7. 进化自身 usage 记账：调用后落盘 llm-usage.jsonl
+evo.recordLlmUsage('测试标签',{prompt_tokens:10,completion_tokens:5,total_tokens:15});
+const usageLines=fs.readFileSync(path.join(evo.EV_ROOT,'llm-usage.jsonl'),'utf8').split('\n').filter(Boolean).map(JSON.parse);
+assert.strictEqual(usageLines.length,1);
+assert.strictEqual(usageLines[0].total,15); assert.strictEqual(usageLines[0].label,'测试标签');
+// O8. 淘汰策略：静态防回归（evictionOrder：非 hard 先淘汰）
+assert.ok(evoSrc.includes('evictionOrder'),'benchmark 淘汰必须 hard 优先存活');
+// O9. hard 轮换：24h 内用过的 hard 降入次段
+const rotPool=[{id:'h1',hard:true,createdAt:'2026-09-01'},{id:'h2',hard:true,createdAt:'2026-09-02'},{id:'n1',createdAt:'2026-09-03'}];
+const rotNow=Date.now();
+const ranked2=evo.rankHardFirst(rotPool,{h2:rotNow-1000});
+assert.deepStrictEqual(ranked2.map(c=>c.id),['h1','h2','n1'],'轮换序应为 fresh hard > 24h 内已用 hard > 非 hard');
+const ranked4=evo.rankHardFirst(rotPool,{n1:rotNow-1000});
+assert.deepStrictEqual(ranked4.map(c=>c.id),['h2','h1','n1'],'非 hard 的 usage 记录无效，fresh hard 仍按时间倒序（h2 较新在前）');
+const ranked3=evo.rankHardFirst(rotPool,{});
+assert.strictEqual(ranked3[0].id,'h2','无 usage 时 fresh hard 按时间倒序，较新的 h2 排最前');
+// O10. 基因 stats：modify/enable 的胜负由实验统一记，add 由 promote 初始化
+fs.mkdirSync(path.join(evo.EV_ROOT),{recursive:true});
+fs.writeFileSync(path.join(evo.EV_ROOT,'genes.json'),JSON.stringify({genes:[{id:'g-stat',text:'统计基因',enabled:true}]}));
+evo.updateGeneStats({type:'gene',change:{action:'modify',id:'g-stat',text:'统计基因 v2'}},false);
+const gj2=JSON.parse(fs.readFileSync(path.join(evo.EV_ROOT,'genes.json'),'utf8'));
+assert.deepStrictEqual(gj2.genes[0].stats,{trials:1,wins:0,losses:1},'实验失败应对基因记 loss');
+evo.updateGeneStats({type:'gene',change:{action:'modify',id:'g-stat',text:'统计基因 v3'}},true);
+const gj3=JSON.parse(fs.readFileSync(path.join(evo.EV_ROOT,'genes.json'),'utf8'));
+assert.deepStrictEqual(gj3.genes[0].stats,{trials:2,wins:1,losses:1},'实验通过应对基因记 win');
+evo.updateGeneStats({type:'gene',change:{action:'add',text:'新基因内容'}},true);
+assert.strictEqual(JSON.parse(fs.readFileSync(path.join(evo.EV_ROOT,'genes.json'),'utf8')).genes[0].stats.trials,2,'add 操作不重复计 stats（promote 时初始化）');
+evo.updateGeneStats({type:'plugin',change:'x'},true);
+assert.strictEqual(JSON.parse(fs.readFileSync(path.join(evo.EV_ROOT,'genes.json'),'utf8')).genes[0].stats.trials,2,'非 gene 类型不记 stats');
 (async()=>{
   const r=await evo.runEvolution({cases:3,promote:false,mutation:{type:'strategy',target:'verification',reason:'test',hypothesis:'test',change:{verification:'strong'}}});
   assert.strictEqual(r.ok,true); assert.strictEqual(r.stage,'rejected'); assert.strictEqual(r.summary.n,3);

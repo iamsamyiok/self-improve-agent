@@ -798,7 +798,9 @@ async function main() {
   });
   await t('llmRetry：状态码与文本判定', () => {
     assert.ok(isRetryableStatus(429) && isRetryableStatus(402) && isRetryableStatus(503));
-    assert.ok(!isRetryableStatus(400) && !isRetryableStatus(404) && !isRetryableStatus(500));
+    // 2026-09-04 优化 2：500/502/504 纳入重试（Agnes 等网关偶发 5xx 属瞬态，不重试会让进化 case 直接判死）
+    assert.ok(isRetryableStatus(500) && isRetryableStatus(502) && isRetryableStatus(504));
+    assert.ok(!isRetryableStatus(400) && !isRetryableStatus(404) && !isRetryableStatus(401) && !isRetryableStatus(403));
     assert.ok(isRateLimitText('Rate limit reached') && isRateLimitText('请求过多，请稍后再试'));
     assert.ok(!isRateLimitText('invalid api key'));
   });
