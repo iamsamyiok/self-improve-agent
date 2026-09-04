@@ -279,6 +279,18 @@ function persistInnerMessages() {
   catch (e) { console.log('[persist] 内层会话落盘失败:', e && e.message || e); } // 关键写失败必须可见
 }
 function clearInnerMessages() { innerMessages.length = 0; persistInnerMessages(); }
+// 防抖持久化（P1-4）：1s 窗口合并连续 onRound 的全量重写；任务结束/异常路径的同步
+// persistInnerMessages 调用点不受影响。窗口内进程崩溃最多丢最近 1s 轮次历史（可接受）
+let _persistTimer = null;
+function persistInnerMessagesDebounced() {
+  if (_persistTimer) return;
+  _persistTimer = setTimeout(() => { _persistTimer = null; persistInnerMessages(); }, 1000);
+  if (_persistTimer.unref) _persistTimer.unref(); // 防止挂起进程退出
+}
+// 退出兜底：防抖窗口内退出时同步刷写（shutdown/exit 均覆盖）
+function flushPendingPersist() {
+  if (_persistTimer) { clearTimeout(_persistTimer); _persistTimer = null; try { persistInnerMessages(); } catch { /* 退出路径尽力而为 */ } }
+}
 // P12改进：新任务开始时清除旧记忆，防止旧任务记忆污染（v0.9.22）
 function clearWorkspaceMemory() {
   try {
@@ -963,8 +975,10 @@ async function handleInnerChat(req, res, preBody, fromQueue) {
       // 流式增量（P0-1）：inner.js 以 onEvent({type:'delta'}) 发出，handleEvent 统一 send 转发前端
       // 轮开始进度（P0-1）：前端执行指示
       onRoundStart: n => send({ type: 'round', round: n }),
-      // 每轮落盘（v0.9.12 P0-2）：工具结果入列后立即持久化，崩溃/重启不丢进行中历史
-      onRound: () => persistInnerMessages()
+      // 每轮落盘（v0.9.12 P0-2）防抖版（P1-4）：1s 窗口合并连续轮的全量重写（长会话每轮
+      // JSON.stringify 整个会话的 I/O 从 O(全量)×轮次 降为窗口内 1 次）；窗口内崩溃最多丢
+      // 最近 1s 的轮次历史（任务结束/异常路径仍同步落盘，见下方各 persistInnerMessages 调用点）
+      onRound: persistInnerMessagesDebounced
     });
     let lastAnswer = await withTaskResume(runInner, { onInfo: send, label: '内层任务' });
     // P15 检查：超时则注入时间耗尽注记
@@ -1776,8 +1790,10 @@ server.listen(PORT, '127.0.0.1', () => {
 // 优雅退出：Ctrl+C / 关闭启动窗口；server.close 带 5 秒强制退出兜底（防 keep-alive 连接挂住）
 function shutdown(signal) {
   console.log(`\n收到 ${signal}，正在关闭服务器...`);
+  flushPendingPersist(); // P1-4：防抖窗口内退出前同步刷写会话
   const force = setTimeout(() => process.exit(0), 5000);
   server.close(() => { clearTimeout(force); console.log('服务器已关闭'); process.exit(0); });
 }
 process.on('SIGINT', () => shutdown('SIGINT'));
 process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('exit', () => { try { flushPendingPersist(); } catch { /* exit 同步路径尽力而为 */ } });

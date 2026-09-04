@@ -755,6 +755,49 @@ async function main() {
     const small = [{ role: 'system', content: 'x' }, { role: 'user', content: 'y' }];
     assert.equal(budgetMessages(small), small, '未超预算应原引用返回');
   });
+
+  await t('rollupMessages：>8 轮触发折叠 + 摘要含工具要点 + 窗口配对完整（P1-3）', () => {
+    const { rollupMessages } = require(path.join(ROOT, 'lib', 'inner'));
+    // 8 轮（16 条）不折叠
+    const eight = [{ role: 'user', content: '任务原文' }];
+    for (let r = 0; r < 8; r++) {
+      eight.push({ role: 'assistant', content: null, tool_calls: [{ id: 'c' + r, type: 'function', function: { name: 'tool' + r, arguments: '{}' } }] });
+      eight.push({ role: 'tool', tool_call_id: 'c' + r, content: `结果${r}` });
+    }
+    assert.equal(rollupMessages(eight), null, '未超 8 轮应返回 null');
+    // 10 轮（20 条）折叠早期 6 轮，保留最近 4 轮
+    const ten = [{ role: 'user', content: '任务原文' }];
+    for (let r = 0; r < 10; r++) {
+      ten.push({ role: 'assistant', content: null, tool_calls: [{ id: `c${r}`, type: 'function', function: { name: `tool${r}`, arguments: '{}' } }] });
+      ten.push({ role: 'tool', tool_call_id: `c${r}`, content: `结果要点${r}` });
+    }
+    const rolled = rollupMessages(ten);
+    assert.ok(Array.isArray(rolled) && rolled.length < ten.length, `折叠后应变短（${rolled.length} < ${ten.length}）`);
+    const sumMsg = rolled.find(m => m.role === 'user' && m.content.includes('上下文折叠'));
+    assert.ok(sumMsg, '应存在折叠摘要消息');
+    assert.ok(sumMsg.content.includes('tool0') && sumMsg.content.includes('结果要点0'), '摘要应含早期轮工具名与结果要点');
+    assert.ok(!sumMsg.content.includes('tool9'), '最近窗口不应被折叠进摘要');
+    assert.ok(!sumMsg.content.includes('tool6'), '保留窗口 4 轮（6-9）不折叠');
+    // 窗口 tool 配对完整：tool9 结果消息仍在
+    assert.ok(rolled.some(m => m.role === 'tool' && m.tool_call_id === 'c9'), '最近窗口 tool 结果保留');
+    assert.ok(rolled.some(m => m.role === 'tool' && m.tool_call_id === 'c6'), '窗口起点轮 tool 结果保留');
+    assert.ok(!rolled.some(m => m.role === 'tool' && m.tool_call_id === 'c0'), '折叠区 tool 结果不再独立存在');
+    // 任务原文保留
+    assert.equal(rolled[0].role, 'user');
+    assert.ok(rolled[0].content.includes('任务原文'), '任务原文保留');
+    // budgetMessages 集成：超轮数消息即使 token 未超预算也被折叠
+    const through = budgetMessages(ten);
+    assert.ok(through.some(m => m.role === 'user' && String(m.content).includes('上下文折叠')), 'budgetMessages 应集成滚动折叠');
+    // 用户中途插话保留：在窗口前插入一条 user
+    const withUser = [{ role: 'user', content: '任务原文' }];
+    for (let r = 0; r < 10; r++) {
+      if (r === 3) withUser.push({ role: 'user', content: '记住要用中文回复' });
+      withUser.push({ role: 'assistant', content: null, tool_calls: [{ id: `d${r}`, type: 'function', function: { name: `t${r}`, arguments: '{}' } }] });
+      withUser.push({ role: 'tool', tool_call_id: `d${r}`, content: `r${r}` });
+    }
+    const rolled2 = rollupMessages(withUser);
+    assert.ok(rolled2.some(m => m.role === 'user' && m.content === '记住要用中文回复'), '用户插话应保留');
+  });
   const { withRetry, RetryableError, isRetryableStatus, isRateLimitText } = require(path.join(ROOT, 'lib', 'llmRetry'));
   await t('llmRetry：限流 429 → 退避后重试成功（info 事件可见）', async () => {
     let n = 0;
@@ -1395,7 +1438,8 @@ async function main() {
     assert.ok(/name === 'write' \|\| name === 'edit'/.test(srv), '子级未声明 writable 时 write/edit 执行层硬拦截');
     assert.ok(/只写子任务指定的目标路径/.test(srv), '可写版子级系统提示存在');
     assert.ok(/milestoneWatch/.test(srv) && /里程碑完成/.test(srv), 'todo.toggle 完成项自动写里程碑记忆');
-    assert.ok(/onRound: \(\) => persistInnerMessages\(\)/.test(srv), '每轮落盘接线（P0-2 server 侧）');
+    assert.ok(/onRound: (?:\(\) => )?persistInnerMessagesDebounced/.test(srv), '每轮落盘接线（P0-2 server 侧，P1-4 防抖版）');
+    assert.ok(/function persistInnerMessagesDebounced/.test(srv) && /function flushPendingPersist/.test(srv), '防抖落盘 + 退出刷写兜底存在（P1-4）');
   });
 
   // ===== 多路 LLM API profile（v0.9.6）：子智能体轮转分摊速率限制 =====
