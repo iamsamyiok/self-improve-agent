@@ -1596,6 +1596,12 @@ const server = http.createServer(async (req, res) => {
       json(res, 200, { success:true, ...evo.listAssets(Math.min(50, Number(url.parse(req.url, true).query.limit) || 8)) });
       return;
     }
+    if (p === '/api/evolution/detail' && req.method === 'GET') {
+      const evo = require('./lib/evolution');
+      const q = url.parse(req.url, true).query;
+      json(res, 200, { success:true, type:String(q.type||''), rows:evo.listEvoDetail(String(q.type||''), Number(q.limit) || 20) });
+      return;
+    }
     if (p === '/api/scout/status' && req.method === 'GET') {
       json(res, 200, require('./lib/scout').scoutStatus());
       return;

@@ -280,5 +280,22 @@ assert.strictEqual(JSON.parse(fs.readFileSync(path.join(evo.EV_ROOT,'genes.json'
   assert.strictEqual(JSON.parse(fs.readFileSync(path.join(evo.EV_ROOT,'scout','pending-genes.json'),'utf8')).genes[0].status,'validated','基因验证后应翻转状态');
   // 调度判定：今日资产已达目标 → due false；清空 state → due true
   assert.strictEqual(scout.scoutDue(),false,'今日达标后不应再触发');
-  console.log('evolution smoke: ok — benchmark/worker/A-B/evaluator/regression/ledger/genes/objective/failure-modes/playbooks/lessons-promote/resume/batch/assets/cleanup/scout');
+  // ===== 进化中心明细（三格点击）：样本 / 实验 / 晋级 + 过期档案标识 =====
+  const benchDetail=evo.listEvoDetail('benchmarks',20);
+  assert.ok(Array.isArray(benchDetail)&&benchDetail.length>=4,'样本明细应包含全部 benchmark');
+  assert.ok(benchDetail.some(b=>b.hard&&b.repairs===2),'样本明细应带难例与返修标记');
+  const expDetail=evo.listEvoDetail('experiments',20);
+  assert.ok(Array.isArray(expDetail)&&expDetail.length>=3,'实验明细应包含全部 exp-*');
+  assert.ok(expDetail.every(x=>typeof x.expired==='boolean'),'实验明细应带过期标识');
+  // 过期场景：删 cases/ 模拟被垃圾清理 → expired=true 且结论内容置空
+  const doneExpDir=path.join(evo.EV_ROOT,'experiments',rInt.experiment);
+  fs.rmSync(path.join(doneExpDir,'cases'),{recursive:true,force:true});
+  const expiredRow=evo.listEvoDetail('experiments',50).find(x=>x.id===String(rInt.experiment).replace(/^exp-/,''));
+  assert.ok(expiredRow&&expiredRow.expired===true,'cases 已清的完结实验应标记过期');
+  assert.strictEqual(expiredRow.type,'','过期档案不应展示 mutation 内容');
+  assert.strictEqual(expiredRow.delta,null,'过期档案不应展示结论数据');
+  const promoDetail=evo.listEvoDetail('promotions',20);
+  assert.ok(Array.isArray(promoDetail),'晋级明细应返回数组');
+  assert.ok(evo.listEvoDetail('unknown',20).length===0,'未知类型应返回空数组');
+  console.log('evolution smoke: ok — benchmark/worker/A-B/evaluator/regression/ledger/genes/objective/failure-modes/playbooks/lessons-promote/resume/batch/assets/cleanup/scout/detail');
 })().catch(e=>{console.error(e);process.exit(1)});

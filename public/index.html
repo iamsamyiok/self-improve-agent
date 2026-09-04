@@ -165,6 +165,9 @@
   .ad-empty { font-size:11.5px; color:var(--text-3); padding:2px; }
   .ad-on { color:var(--green-dark); font-style:normal; font-weight:600; }
   .ad-off { color:var(--text-3); font-style:normal; }
+  .ad-hard { color:#b45309; font-style:normal; font-weight:600; margin-right:4px; }
+  .ad-expired { opacity:.55; }
+  .ad-expired b { color:var(--text-3); font-weight:500; }
   .scout-head { display:flex; align-items:center; justify-content:space-between; font-size:12px; font-weight:600; color:var(--text-2); padding:10px 2px 2px; }
   .scout-run { font-size:11px; padding:3px 10px; border:1px solid var(--border); border-radius:999px; background:var(--side); color:var(--green-dark); cursor:pointer; }
   .scout-run:hover:not(:disabled) { background:var(--green-light); }
@@ -772,6 +775,41 @@
   async function refreshEvoSilent(){ try { await renderEvo(true); } catch {} }
   async function refreshEvo(){ await renderEvo(false); }
 
+  // 统计格明细面板（样本/实验/晋级共用）：过期档案只显示「已过期」标识，内容不展示
+  function toggleEvoDetail(statEl, kind) {
+    let panel = $('assetDetail');
+    const arrow = statEl.querySelector('span');
+    if (panel && panel.dataset.open === '1' && panel.dataset.kind === kind) {
+      panel.dataset.open = '0'; panel.style.display = 'none';
+      if (arrow.textContent.endsWith('▴')) arrow.textContent = arrow.textContent.slice(0, -1) + '▾';
+      return;
+    }
+    if (!panel) {
+      panel = document.createElement('div');
+      panel.id = 'assetDetail'; panel.className = 'asset-detail';
+      $('edStats').after(panel);
+    }
+    panel.dataset.open = '1'; panel.dataset.kind = kind; panel.style.display = 'block';
+    panel.innerHTML = '<div class="ad-loading">加载中…</div>';
+    const titles = { benchmarks: '进化样本（最新任务池）', experiments: '实验记录（最新在前）', promotions: '版本晋级历史' };
+    panel.innerHTML = `<div class="ad-title">${titles[kind]}</div><div class="ad-loading">加载中…</div>`;
+    api(`/api/evolution/detail?type=${kind}&limit=20`).then(d => {
+      if (!d.success) { panel.innerHTML = `<div class="ad-title">${titles[kind]}</div><div class="ad-loading">加载失败</div>`; return; }
+      const rows = d.rows || [];
+      let body = '';
+      if (kind === 'benchmarks') {
+        body = rows.map(b => `<div class="ad-item"><b>${esc(b.task) || '（未知任务）'}</b><span>${b.hard ? '<i class="ad-hard">难例</i>' : ''}${b.repairs ? `返修 ${b.repairs} 次 · ` : ''}${esc(String(b.createdAt || '').slice(0, 10))}</span></div>`).join('');
+      } else if (kind === 'experiments') {
+        body = rows.map(x => x.expired
+          ? `<div class="ad-item ad-expired"><b>档案已过期（超过 30 天已清理）</b><span>${esc(String(x.id).slice(0, 24))} · ${esc(String(x.date || '').slice(0, 10))}</span></div>`
+          : `<div class="ad-item"><b>${esc(x.type || 'mutation')} ${x.pass ? '<i class="ad-on">通过</i>' : '<i class="ad-off">未通过</i>'}${x.promoted ? '<i class="ad-on"> 已晋级</i>' : ''}</b><span>${x.delta === null || x.delta === undefined ? '' : `效果 ${esc(pctf(x.delta))} · `}${esc(String(x.id).slice(0, 24))} · ${esc(String(x.date || '').slice(0, 10))}</span></div>`).join('');
+      } else if (kind === 'promotions') {
+        body = rows.map(p => `<div class="ad-item"><b>v${p.version} <i class="ad-on">已上线</i></b><span>${p.delta === null || p.delta === undefined ? '' : `效果 ${esc(pctf(p.delta))} · `}${esc(p.what) || '策略已升级'} · ${esc(String(p.date || '').slice(0, 10))}</span></div>`).join('');
+      }
+      panel.innerHTML = `<div class="ad-title">${titles[kind]}</div>${body || '<div class="ad-empty">暂无记录</div>'}`;
+    }).catch(() => { panel.innerHTML = `<div class="ad-title">${titles[kind]}</div><div class="ad-loading">加载失败</div>`; });
+  }
+
   // 资产明细面板：点击「经验资产」格展开，展示四类资产的具体内容（最新条目）
   function toggleAssetDetail(statEl, version, benchmarks, expCount, promoted) {
     let panel = $('assetDetail');
@@ -850,13 +888,16 @@
     // 抽屉内部
     $('edRunning').classList.toggle('show', !!st.running);
     $('edRunBtn').disabled = !!st.running || !st.autoEvolve;
-    // 经验资产格：替换「当前版本」格（版本号 pill/趋势里都有），版本外的快速成长指标；点击展开明细
+    // 统计格：全部可点击展开明细（资产/样本/实验/晋级）；过期档案只显示标识不展示内容
     $('edStats').innerHTML = `
       <div class="stat stat-click" id="statAssets" title="点击查看资产明细"><b>${assetTotal}</b><span>经验资产 ▾</span></div>
-      <div class="stat"><b>${benchmarks}</b><span>进化样本</span></div>
-      <div class="stat"><b>${h.length}</b><span>实验次数</span></div>
-      <div class="stat"><b style="color:${promoted?'var(--green)':'inherit'}">${promoted}</b><span>成功进化</span></div>`;
+      <div class="stat stat-click" id="statBench" title="点击查看样本明细"><b>${benchmarks}</b><span>进化样本 ▾</span></div>
+      <div class="stat stat-click" id="statExps" title="点击查看实验明细"><b>${h.length}</b><span>实验次数 ▾</span></div>
+      <div class="stat stat-click" id="statPromo" title="点击查看晋级明细"><b style="color:${promoted?'var(--green)':'inherit'}">${promoted}</b><span>成功进化 ▾</span></div>`;
     $('statAssets').onclick = () => toggleAssetDetail($('statAssets'), version, benchmarks, h.length, promoted);
+    $('statBench').onclick = () => toggleEvoDetail($('statBench'), 'benchmarks');
+    $('statExps').onclick = () => toggleEvoDetail($('statExps'), 'experiments');
+    $('statPromo').onclick = () => toggleEvoDetail($('statPromo'), 'promotions');
     // 欢迎页成长统计行：让「系统越来越好」在主界面可见（随每次任务增长）
     const growth = $('growthLine');
     if (growth) {
