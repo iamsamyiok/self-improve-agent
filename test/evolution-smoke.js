@@ -60,6 +60,14 @@ assert.ok(evoSrc.includes("fs.renameSync(tmp, fp)"),'writeJson 原子替换（�
 assert.ok(!evoSrc.includes('withStateLock'),'同步读改写天然原子，不得残留未使用的锁机制（高3 复核）');
 assert.ok(evoSrc.includes('function checkMutationWatchdog') && evoSrc.includes('checkMutationWatchdog(rec)'),'晋级后退化看门狗接线（高4）');
 assert.ok(evoSrc.includes('watchdog-log.jsonl'),'看门狗审计日志落盘（高4）');
+// ===== 断点续跑 + 攒批触发 =====
+assert.ok(evoSrc.includes('function findResumableExperiment'),'中断实验发现函数存在');
+assert.ok(evoSrc.includes("writeJson(path.join(exp,'state.json')"),'实验元数据 state.json 落盘（mutation + case 清单）');
+assert.ok(evoSrc.includes('markExperimentFinished'),'实验完成刷新攒批起点');
+assert.ok(evoSrc.includes('function newBenchmarksSinceLastExp'),'攒批计数函数存在');
+assert.ok(evoSrc.includes('resumable.state.selected'),'续跑复用原 case 清单');
+const srvSrc2=fs.readFileSync(require('path').join(__dirname,'..','server.js'),'utf8');
+assert.ok(srvSrc2.includes('newBenchmarksSinceLastExp() >=') && srvSrc2.includes('DUAL_AGENT_EVOLUTION_MIN_NEW_CASES'),'自动触发带攒批门槛（多次聊天合并分析）');
 const innerSrc=fs.readFileSync(require('path').join(__dirname,'..','lib','inner.js'),'utf8');
 assert.ok(innerSrc.includes('DUAL_AGENT_EVOLUTION_WORKER') && innerSrc.includes('payload.temperature'),'实验 worker 路径必须注入温度控制');
 assert.ok(evoSrc.includes('DUAL_AGENT_EVOLUTION_PREFILTER') && evoSrc.includes('prefilterReject'),'3-case 快筛必须存在且可通过 env 关闭');
@@ -185,5 +193,20 @@ assert.strictEqual(JSON.parse(fs.readFileSync(path.join(evo.EV_ROOT,'genes.json'
   assert.ok(fs.existsSync(path.join(geneExpDir,'candidate','genes.json')),'gene mutation 应生成 candidate 基因变更集');
   const geneDecision=JSON.parse(fs.readFileSync(path.join(geneExpDir,'decision.json'),'utf8'));
   assert.ok(Array.isArray(geneDecision.targetedPatterns)&&geneDecision.targetedPatterns.length>=1,'decision 应记录靶向失败模式');
-  console.log('evolution smoke: ok — benchmark/worker/A-B/evaluator/regression/ledger/genes/objective/failure-modes/playbooks/lessons-promote');
+  // 断点续跑端到端：删 decision 模拟中断 → 重跑应同 id 续跑且已完成 case 的 result 未被覆盖
+  const rInt=await evo.runEvolution({cases:3,promote:false,mutation:{type:'strategy',target:'verification',reason:'test',hypothesis:'t',change:{verification:'strong'}}});
+  const intDir=path.join(evo.EV_ROOT,'experiments',rInt.experiment);
+  const intCases=fs.readdirSync(path.join(intDir,'cases')).filter(d=>fs.existsSync(path.join(intDir,'cases',d,'result.json')));
+  for (const d of intCases) { const j=JSON.parse(fs.readFileSync(path.join(intDir,'cases',d,'result.json'),'utf8')); j.sentinel='keep'; fs.writeFileSync(path.join(intDir,'cases',d,'result.json'),JSON.stringify(j)); }
+  assert.ok(fs.existsSync(path.join(intDir,'state.json')),'实验元数据 state.json 已落盘');
+  fs.rmSync(path.join(intDir,'decision.json'));
+  assert.strictEqual(evo.findResumableExperiment().state.id,rInt.experiment,'中断实验应可被发现');
+  const rRes=await evo.runEvolution({promote:false});
+  assert.strictEqual(rRes.experiment,rInt.experiment,'中断后续跑应复用同一实验 id');
+  assert.strictEqual(JSON.parse(fs.readFileSync(path.join(intDir,'decision.json'),'utf8')).resumed,true,'decision 应标记 resumed');
+  const kept=intCases.every(d=>{ try { return JSON.parse(fs.readFileSync(path.join(intDir,'cases',d,'result.json'),'utf8')).sentinel==='keep'; } catch { return false; } });
+  assert.ok(kept,'已完成 case 的结果未被重跑覆盖（断点生效）');
+  // 攒批计数：实验刚结束 → 新 benchmark 计数 0
+  assert.strictEqual(evo.newBenchmarksSinceLastExp(),0,'实验完成后攒批计数应归零');
+  console.log('evolution smoke: ok — benchmark/worker/A-B/evaluator/regression/ledger/genes/objective/failure-modes/playbooks/lessons-promote/resume/batch');
 })().catch(e=>{console.error(e);process.exit(1)});

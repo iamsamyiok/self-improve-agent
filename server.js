@@ -600,9 +600,16 @@ function matchSmallTalk(message) {
   return null;
 }
 
-async function handleInnerChat(req, res, preBody, fromQueue) {
+ async function handleInnerChat(req, res, preBody, fromQueue) {
  const body = preBody !== undefined ? preBody : await readBody(req);
  const message = String(body.message || '').trim();
+ // P1 停止确认：前端 abort 时返回 {type:'stopped'}，让 UI 展示"已确认停止"而非猜测
+ req.on('abort', () => {
+   try { res.write(`data: ${JSON.stringify({ type: 'stopped' })}\n\n`); } catch {}
+   try { res.end(); } catch {}
+   innerLock = false;
+   drainInnerQueue();
+ });
  if (!message) { json(res, 400, { success: false, error: '消息为空' }); return; }
  // 闲聊短路：身份/问候类问题由产品直接回答（秒回、绝对自然），不进任务循环——
  // 底层模型对这类问题有自己的身份模板，会泄漏供应商身份甚至输出 JSON
@@ -1101,7 +1108,10 @@ async function handleInnerChat(req, res, preBody, fromQueue) {
         }
         // 真正的自进化：任务完成只产生经验，异步启动 Evolution Engine（后台 A/B 实验），
         // Engine 自己负责 candidate sandbox、统计门槛、regression 与 promote。
-        if (evolution.shouldAutoEvolve() && process.env.DUAL_AGENT_EVOLUTION_WORKER !== '1') {
+        // 攒批触发：自上次实验完成以来新 benchmark ≥ MIN_NEW_CASES（默认 3）才自动触发——
+        // 多次聊天的任务合并成一批统一分析，避免每个任务都单独跑一轮小实验
+        if (evolution.shouldAutoEvolve() && process.env.DUAL_AGENT_EVOLUTION_WORKER !== '1'
+            && evolution.newBenchmarksSinceLastExp() >= (Number(process.env.DUAL_AGENT_EVOLUTION_MIN_NEW_CASES) || 3)) {
           process.env.DUAL_AGENT_EVOLUTION_RUNNING = '1';
           setImmediate(() => require('./lib/evolution').runEvolution({ promote: process.env.DUAL_AGENT_AUTO_PROMOTE !== '0' })
             .catch((e) => console.error('[evolution] 自动进化失败:', (e && e.message) || e))
@@ -1536,6 +1546,25 @@ const server = http.createServer(async (req, res) => {
       persistInnerMessages();
       clearWorkspaceMemory(); // P12: 同时清除工作区记忆
       json(res, 200, { success: true, current: id, sessions: idx.list.slice().sort((a, b) => b.ts - a.ts) });
+      return;
+    }
+    // P0 单条撤回：从当前会话删除 user+assistant 配对（最近 N 条），供用户撤销误操作
+    if (p === '/api/inner/undo' && req.method === 'POST') {
+      if (innerLock) { json(res, 409, { success: false, error: '内层执行中，不能撤回' }); return; }
+      const body = await readBody(req);
+      const n = Math.max(1, Number(body.n) || 1);
+      // 每次撤回弹出 2 条（user 消息 + 对应 assistant 回复）；底部有孤立 assistant 时只弹 1 条
+      let removed = 0;
+      for (let i = 0; i < n && innerMessages.length; i++) {
+        const last = innerMessages[innerMessages.length - 1];
+        if (last && last.role === 'assistant') { innerMessages.pop(); removed++; }
+        const last2 = innerMessages[innerMessages.length - 1];
+        if (last2 && last2.role === 'user') { innerMessages.pop(); removed++; }
+        else break; // 没有匹配的 user 消息则停止（防止误删）
+      }
+      persistInnerMessages();
+      loadInnerMessages(); // 重新加载到当前内存（persistInnerMessages 写磁盘后 reload 到内存）
+      json(res, 200, { success: true, removed, messages: innerMessages.filter(m => m.role !== 'system').slice(-60) });
       return;
     }
 
