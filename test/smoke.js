@@ -2388,8 +2388,27 @@ async function main() {
     assert.ok(skillMd.includes('expiresAt'), '结果报告要求解析精确过期时间');
     const sh = fs.readFileSync(path.join(ROOT, 'skills', 'show', 'deploy.sh'), 'utf8');
     assert.ok(sh.includes('show.127.dev') && sh.includes('/upload'), '脚本上传端点正确');
+    // 行为级：误存网页 HTML 的 SKILL.md 必须被扫描层整条跳过（不进清单、不污染系统提示词）
+    const os = require('os');
+    const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'skill-html-'));
+    const tmpSkills = path.join(tmpRoot, 'skills');
+    fs.mkdirSync(path.join(tmpSkills, 'bad-skill'), { recursive: true });
+    fs.writeFileSync(path.join(tmpSkills, 'bad-skill', 'SKILL.md'), '\n\n<!DOCTYPE html>\n<html lang="en"><head><title>github page</title></head></html>\n');
+    fs.mkdirSync(path.join(tmpSkills, 'good-skill'), { recursive: true });
+    fs.writeFileSync(path.join(tmpSkills, 'good-skill', 'SKILL.md'), '---\nname: good-skill\ndescription: 正常技能\n---\n正文\n');
+    const scanned = require(path.join(ROOT, 'plugins', 'skill.js')).listAll({ cwd: tmpRoot });
+    assert.ok(!scanned.some(s => s.name === 'bad-skill'), 'HTML 垃圾 SKILL.md 被跳过');
+    assert.ok(scanned.some(s => s.name === 'good-skill' && s.desc === '正常技能'), '正常技能不受影响');
+    assert.ok(scanned.every(s => s.srcTag === 'workspace' || s.srcTag === 'builtin'), '来源标签 srcTag 恒有值');
     assert.ok(sh.includes('.env') && sh.includes('secret') && sh.includes('exit 1'), '脚本内置敏感文件一票否决');
     assert.ok(sh.includes('expiresAt'), '脚本输出过期时间');
+  });
+  await t('快照技能显示：来源列与描述清洗（防 DOCTYPE 垃圾描述）', () => {
+    const html = fs.readFileSync(path.join(ROOT, 'public', 'index.html'), 'utf8');
+    const srv = fs.readFileSync(path.join(ROOT, 'server.js'), 'utf8');
+    assert.ok(html.includes("s.srcTag === 'workspace' ? '工作区' : '内置'"), '快照技能表含来源列');
+    assert.ok(html.includes("replace(/\\s+/g, ' ').trim().slice(0, 60)"), '描述清洗空白并截断 60 字符');
+    assert.ok(srv.includes("srcTag: s.srcTag || 'builtin'"), '快照接口透传 srcTag');
   });
   await t('P0-P3 前端静态防回归：交互元素接线', () => {
     const html = fs.readFileSync(path.join(ROOT, 'public', 'index.html'), 'utf8');

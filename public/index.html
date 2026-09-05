@@ -893,9 +893,9 @@
           ${(d.plugins||[]).map(p => `<tr><td>${esc2(p.name)}${p.essential ? ' <span style="color:var(--green,#059669);font-size:10px;">必用</span>' : ''}</td><td>${esc2(p.desc || '—')}</td><td>${p.source === 'forged' ? '锻造' : '内置'}</td></tr>`).join('')}
           </table></div>
         </div>
-        <div class="snap-sec"><b class="snap-title">技能（方法论层，共 ${(d.skills||[]).length} 个；任务匹配时自动提示优先应用）</b>
-          <div class="snap-list"><table><tr><th>名称</th><th>适用场景</th></tr>
-          ${(d.skills||[]).map(s => `<tr><td>${esc2(s.name)}</td><td>${esc2(String(s.desc || '—').slice(0, 90))}</td></tr>`).join('') || '<tr><td colspan="2">暂无技能</td></tr>'}
+        <div class="snap-sec"><b class="snap-title">技能（方法论层，共 ${(d.skills||[]).length} 个${(() => { const n = (d.skills||[]).filter(s => s.srcTag === 'workspace').length; return n ? `：内置 ${(d.skills||[]).length - n} · 本工作区 ${n}` : ''; })()}；任务匹配时自动提示优先应用）</b>
+          <div class="snap-list"><table><tr><th>名称</th><th>适用场景</th><th>来源</th></tr>
+          ${(d.skills||[]).map(s => `<tr><td>${esc2(s.name)}</td><td>${esc2(String(s.desc || '—').replace(/\s+/g, ' ').trim().slice(0, 60))}</td><td>${s.srcTag === 'workspace' ? '工作区' : '内置'}</td></tr>`).join('') || '<tr><td colspan="3">暂无技能</td></tr>'}
           </table></div>
         </div>`;
     } catch (e) { $('snapBody').innerHTML = '<div style="color:var(--sub);padding:20px 0;">读取失败：' + esc(e.message || e) + '</div>'; }

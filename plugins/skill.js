@@ -88,6 +88,14 @@ function clipDesc(s, max = 160) {
 }
 
 // 扫描一个根下的全部技能：目录型（含 SKILL.md）+ 单文件型
+// 垃圾文档判定：SKILL.md 实为误存的网页 HTML（scout 安装/手工保存偶发）——
+// 无 frontmatter 且首个非空行是 HTML 文档标签。这类「技能」会把 DOCTYPE/标签当描述
+// 注入系统提示词与快照，污染 LLM 上下文，必须在扫描层整条跳过。
+function looksLikeHtmlDoc(text) {
+  const first = String(text || '').split('\n').map(l => l.trim()).find(l => l) || '';
+  return /^<!doctype/i.test(first) || /^<html[\s>]/i.test(first);
+}
+
 // 返回 [{ name, desc, kind: 'dir'|'file', dir, entry }]；目录型 name 取 frontmatter.name（回退目录名）
 function scanRoot(dir) {
   const out = [];
@@ -101,6 +109,7 @@ function scanRoot(dir) {
       let desc = '';
       try {
         const text = fs.readFileSync(entry, 'utf8');
+        if (looksLikeHtmlDoc(text)) continue; // 误存网页 HTML：整条跳过（不进清单、不进系统提示词）
         const fm = parseFrontmatter(text);
         if (fm && fm.name && STD_NAME_RE.test(fm.name)) name = fm.name;
         if (fm && fm.description) desc = fm.description;
@@ -112,6 +121,7 @@ function scanRoot(dir) {
       let head = '';
       try {
         const text = fs.readFileSync(path.join(dir, e.name), 'utf8');
+        if (looksLikeHtmlDoc(text)) continue;
         const fm = parseFrontmatter(text); // 单文件也兼容 frontmatter（description 优先）
         head = (fm && fm.description) || text.split('\n').find(l => l.trim() && !l.startsWith('---')).replace(/^#+\s*/, '');
       } catch { /* ignore */ }
@@ -124,12 +134,13 @@ function scanRoot(dir) {
 // 全根合并去重：先扫到者赢——roots[0] 是工作区，故工作区覆盖全局共享（同名技能就近优先）
 function listAll(ctx) {
   const merged = new Map();
-  for (const root of skillRoots(ctx)) {
+  skillRoots(ctx).forEach((root, idx) => {
     for (const s of scanRoot(root)) {
       const key = s.name;
-      if (!merged.has(key)) merged.set(key, { ...s, root });
+      // srcTag：展示用来源标签（roots[0] 工作区 / 其余内置共享库），与 root 路径解耦
+      if (!merged.has(key)) merged.set(key, { ...s, root, srcTag: idx === 0 ? 'workspace' : 'builtin' });
     }
-  }
+  });
   return [...merged.values()].sort((a, b) => a.name.localeCompare(b.name));
 }
 

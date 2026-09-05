@@ -1708,7 +1708,7 @@ const server = http.createServer(async (req, res) => {
             contextWindow: limits.CTX_TOKENS
           },
           plugins: pluginRows,
-          skills: skills.map(s => ({ name: s.name, desc: s.desc || '' })),
+          skills: skills.map(s => ({ name: s.name, desc: s.desc || '', srcTag: s.srcTag || 'builtin' })),
           systemPrompt: buildInnerSystemPrompt(wsDir)
         });
       } catch (e) { json(res, 500, { success: false, error: String((e && e.message) || e) }); }
