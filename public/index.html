@@ -260,6 +260,27 @@
   #setupMask.show { display:block; }
   #setupCard { position:fixed; z-index:71; left:50%; top:10%; transform:translateX(-50%); width:min(430px, calc(100vw - 28px)); max-height:78vh; overflow:auto; background:var(--side,#171C22); border:1px solid var(--border,#262C33); border-radius:16px; padding:18px 18px 14px; display:none; box-shadow:0 18px 60px rgba(0,0,0,.4); }
   #setupCard.show { display:block; }
+  /* 智能体快照（v3.5.0）：与设置卡片同视觉语言，更宽以容纳插件/技能清单 */
+  #snapMask { position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:72; display:none; }
+  #snapMask.show { display:block; }
+  #snapCard { position:fixed; z-index:73; left:50%; top:6%; transform:translateX(-50%); width:min(720px, calc(100vw - 28px)); max-height:84vh; overflow:auto; background:var(--side,#171C22); border:1px solid var(--border,#262C33); border-radius:16px; padding:18px 18px 14px; display:none; box-shadow:0 18px 60px rgba(0,0,0,.4); }
+  #snapCard.show { display:block; }
+  .snap-body { font-size:13px; }
+  .snap-sec { border:1px solid var(--border); border-radius:11px; padding:12px 14px; margin-bottom:10px; }
+  .snap-sec > b.snap-title { display:block; font-size:12px; color:var(--text-3); letter-spacing:.4px; margin-bottom:8px; }
+  .snap-kv { display:flex; flex-wrap:wrap; gap:6px 18px; font-size:12.5px; color:var(--text-2); }
+  .snap-kv b { color:var(--text); font-weight:600; }
+  .snap-pipe { font-size:12.5px; color:var(--text-2); line-height:1.9; }
+  .snap-pipe .step { color:var(--text); font-weight:600; }
+  .snap-pre { background:var(--bg,#101418); border:1px solid var(--border); border-radius:9px; padding:10px 12px; font-size:11.5px; line-height:1.6; white-space:pre-wrap; word-break:break-word; max-height:260px; overflow:auto; color:var(--text-2); font-family:ui-monospace,Menlo,Consolas,monospace; }
+  .snap-toggle { font-size:12px; color:var(--acc,#6366F1); background:none; border:none; cursor:pointer; padding:0; margin:6px 0; }
+  .snap-list { max-height:220px; overflow:auto; }
+  .snap-list table { width:100%; border-collapse:collapse; font-size:12px; }
+  .snap-list th { text-align:left; color:var(--text-3); font-weight:500; padding:4px 8px; border-bottom:1px solid var(--border); position:sticky; top:0; background:var(--side,#171C22); }
+  .snap-list td { padding:4px 8px; border-bottom:1px solid var(--border); color:var(--text-2); vertical-align:top; }
+  .snap-list td:first-child { color:var(--text); white-space:nowrap; }
+  .snap-ctxbar { height:6px; border-radius:4px; background:var(--border); overflow:hidden; margin-top:6px; }
+  .snap-ctxbar i { display:block; height:100%; background:linear-gradient(90deg,#6366F1,#8B5CF6); border-radius:4px; }
   .su-head { display:flex; align-items:center; gap:8px; margin-bottom:14px; }
   .su-head b { font-size:15px; }
   .su-head .ed-close { margin-left:auto; }
@@ -297,33 +318,43 @@
       新对话
     </button>
     <nav>
-      <div class="nav-item active" id="navChat" onclick="switchTab('chat')">
+      <div class="sb-sec">任务执行</div>
+      <div class="nav-item active" id="navChat" onclick="focusChat()" title="与 Inner Agent 协作完成日常任务">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
         对话
       </div>
-      <div class="nav-item" onclick="openEvo()">
+      <div class="nav-item" onclick="window.open('/process','_blank')" title="实时工作流审计：工具调用序列、执行事件与 token 计量">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 15l2 2 4-4"/></svg>
+        执行过程
+      </div>
+      <div class="nav-item" onclick="openSnapshot()" title="查看当前执行智能体的构成：版本、模型、系统提示词、插件与技能">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+        智能体快照
+      </div>
+      <div class="sb-sec">自我改进</div>
+      <div class="nav-item" onclick="openEvo()" title="进化实验、版本历史与系统健康分">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4m0 12v4M2 12h4m12 0h4M5 5l3 3m8 8 3 3m0-14-3 3m-8 8-3 3"/></svg>
         进化中心
         <span class="ni-badge" id="navEvoBadge">v0</span>
       </div>
-      <div class="nav-item" onclick="window.open('/process','_blank')">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 15l2 2 4-4"/></svg>
-        执行过程
+      <div class="nav-item" id="navScout" onclick="runScoutManual()" title="手动执行一次 GitHub 外部学习：从高星 Agent 项目提炼可借鉴机制，技能硬校验入库、行为基因走 A/B 验证">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>
+        GitHub 学习
       </div>
-      <div class="nav-item" onclick="window.open('/help','_blank')">
+      <div class="nav-item" onclick="window.open('/help','_blank')" title="使用文档、功能说明与常见问题">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3M12 17h.01"/></svg>
         帮助
       </div>
-      <div class="sb-sec">进化档案</div>
+      <div class="sb-sec">成长指标</div>
       <div style="padding:2px 10px;">
         <div class="health" style="margin-top:2px;"><span class="dot" id="evoDotSample"></span><span id="evoSampleText">样本 0</span></div>
         <div class="health"><span class="dot" id="evoDotExp"></span><span id="evoExpText">实验 0 次</span></div>
       </div>
     </nav>
     <div class="sb-foot">
-      <div class="ws-row">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
-        <select id="wsSelect" onchange="switchWorkspace(this.value)"></select>
+      <div class="ws-row" id="footUpdRow">
+        <span id="footVer" style="font-size:12px;color:var(--sub);font-weight:600;">v—</span>
+        <button id="updBtn" onclick="checkUpdate()" style="margin-left:auto;border:1px solid var(--border);background:transparent;color:var(--sub);border-radius:8px;padding:3px 9px;font-size:11.5px;cursor:pointer;" title="对比 GitHub 最新 release，有新版本时给出更新链接">检查更新</button>
       </div>
       <div class="health"><span class="dot" id="healthDot"></span><span id="healthText">连接中…</span></div>
     </div>
@@ -380,6 +411,17 @@
 
 <!-- 移动端侧栏遮罩 -->
 <div id="sideMask" onclick="toggleSidebar(false)"></div>
+
+<!-- 智能体快照弹窗（v3.5.0 透明化）：当前执行智能体的版本、模型、提示词、插件与技能构成 -->
+<div id="snapMask" onclick="closeSnapshot()"></div>
+<div id="snapCard" role="dialog" aria-label="智能体快照">
+  <div class="su-head">
+    <b>智能体快照</b>
+    <span class="tag g" id="snapVer" style="margin-left:2px;">v—</span>
+    <button class="ed-close" style="margin-left:auto;" onclick="closeSnapshot()" aria-label="关闭">✕</button>
+  </div>
+  <div id="snapBody" class="snap-body"><div style="color:var(--sub);padding:24px 0;text-align:center;">正在读取当前智能体构成…</div></div>
+</div>
 
 <!-- 模型配置弹窗（首启未配置自动弹出；?setup=1 强制弹出） -->
 <div id="setupMask" onclick="closeSetup()"></div>
@@ -766,6 +808,113 @@
 
   /* ---------- 进化中心 ---------- */
   function openEvo(){ $('evoMask').classList.add('show'); $('evoDrawer').classList.add('show'); backToMain(); refreshEvo(); }
+
+  /* ---------- 智能体快照（v3.5.0 透明化）：一屏看清当前执行智能体的构成 ---------- */
+  function focusChat(){ const el = $('input'); if (el) { el.focus(); } const sb = $('sidebar'); if (window.innerWidth <= 860 && sb) { sb.classList.add('hidden'); $('sideMask').classList.remove('show'); } }
+  async function openSnapshot(){
+    $('snapMask').classList.add('show'); $('snapCard').classList.add('show');
+    try {
+      const d = await api('/api/agent/snapshot');
+      if (!d.success) { $('snapBody').innerHTML = '<div style="color:var(--sub);padding:20px 0;">读取失败：' + esc(d.error || '未知错误') + '</div>'; return; }
+      const esc2 = esc;
+      const up = d.model && d.model.llmSource === 'evolution';
+      const pct = d.session && d.session.budgetTokens ? Math.min(100, Math.round(d.session.estTokens / d.session.budgetTokens * 1000) / 10) : 0;
+      const ctxPct = d.session && d.session.contextWindow ? Math.min(100, Math.round(d.session.estTokens / d.session.contextWindow * 1000) / 10) : 0;
+      const h = Math.floor((d.uptimeSec||0) / 3600), m = Math.floor(((d.uptimeSec||0) % 3600) / 60);
+      const brokenPlugins = (d.plugins||[]).filter(p => p.status === 'broken').length;
+      $('snapVer').textContent = 'v' + d.version;
+      $('snapBody').innerHTML = `
+        <div class="snap-sec"><b class="snap-title">身份与模型</b>
+          <div class="snap-kv">
+            <span>版本 <b>v${esc2(d.version)}</b></span>
+            <span>模型 <b>${esc2(d.model.model || '未配置')}</b></span>
+            <span>API <b>${esc2(d.model.host || '未配置')}</b></span>
+            <span>LLM 通道 <b>${up ? '进化专用' : '与执行共用'}</b></span>
+            <span>语义记忆 <b>${d.model.embedding ? '已启用' : '关键词降级'}</b></span>
+            <span>运行 <b>${h ? h + ' 小时 ' : ''}${m} 分钟</b></span>
+            <span>状态 <b>${d.running ? '任务执行中' : '空闲待命'}</b></span>
+          </div>
+        </div>
+        <div class="snap-sec"><b class="snap-title">工作过程（每次任务的执行流水线）</b>
+          <div class="snap-pipe">
+            <span class="step">1 预取</span> 记忆检索 + 历史任务 + 技能匹配，任务开始前自动注入背景<br>
+            <span class="step">2 规划</span> 复杂任务先建任务清单，执行中动态修订<br>
+            <span class="step">3 执行</span> 调用插件读写文件、执行命令、联网检索，长输出自动折叠<br>
+            <span class="step">4 核验</span> 交付前 verify 断言关键产出，失败自动返修<br>
+            <span class="step">5 沉淀</span> 成功任务入 Benchmark 供进化实验重放，失败任务进强化补练队列
+          </div>
+          <div class="snap-kv" style="margin-top:8px;">
+            <span>本会话消息 <b>${d.session.messages}</b></span>
+            <span>工具调用 <b>${d.session.toolCalls} 次</b></span>
+            <span>当前上下文 <b>≈${(d.session.estTokens||0).toLocaleString()} tokens</b></span>
+            <span>对话预算 <b>${(d.session.budgetTokens||0).toLocaleString()} tokens</b></span>
+          </div>
+          <div class="snap-ctxbar" title="当前上下文占输入预算 ${pct}%（窗口 512K tokens 的 80%）"><i style="width:${Math.min(100, pct)}%"></i></div>
+          <div style="font-size:11px;color:var(--sub);margin-top:4px;">预算占用 ${pct}% · 占模型窗口 ${ctxPct}%（窗口 ${(d.session.contextWindow||0).toLocaleString()} tokens 的 80% 为安全输入预算，超出部分自动压缩旧工具结果）</div>
+        </div>
+        <div class="snap-sec"><b class="snap-title">系统提示词（发送给模型的完整指令，每轮实时组装）</b>
+          <button class="snap-toggle" onclick="const p=this.nextElementSibling; p.style.display = p.style.display==='none' ? 'block' : 'none'; this.textContent = p.style.display==='none' ? '▸ 展开全文（' + ${d.systemPrompt.length} + ' 字符）' : '▾ 收起'">▸ 展开全文（${d.systemPrompt.length} 字符）</button>
+          <pre class="snap-pre" style="display:none;">${esc2(d.systemPrompt)}</pre>
+        </div>
+        <div class="snap-sec"><b class="snap-title">进化状态</b>
+          <div class="snap-kv">
+            <span>进化版本 <b>v${d.evolution.version}</b></span>
+            <span>健康分 <b>${d.evolution.health == null ? '—' : d.evolution.health}</b></span>
+            <span>样本 <b>${d.evolution.benchmarks}</b></span>
+            <span>实验 <b>${d.evolution.experiments} 次</b></span>
+            <span>生效改动 <b>${esc2(d.evolution.activeMutation || '无（基线版本）')}</b></span>
+          </div>
+        </div>
+        <div class="snap-sec"><b class="snap-title">插件（Agent 的工具层，共 ${(d.plugins||[]).length} 个${brokenPlugins ? `，<span style="color:var(--red,#dc2626)">${brokenPlugins} 个异常</span>` : ''}）</b>
+          <div class="snap-list"><table><tr><th>名称</th><th>职责</th><th>来源</th></tr>
+          ${(d.plugins||[]).map(p => `<tr><td>${esc2(p.name)}${p.essential ? ' <span style="color:var(--green,#059669);font-size:10px;">必用</span>' : ''}</td><td>${esc2(p.desc || '—')}</td><td>${p.source === 'forged' ? '锻造' : '内置'}</td></tr>`).join('')}
+          </table></div>
+        </div>
+        <div class="snap-sec"><b class="snap-title">技能（方法论层，共 ${(d.skills||[]).length} 个；任务匹配时自动提示优先应用）</b>
+          <div class="snap-list"><table><tr><th>名称</th><th>适用场景</th></tr>
+          ${(d.skills||[]).map(s => `<tr><td>${esc2(s.name)}</td><td>${esc2(String(s.desc || '—').slice(0, 90))}</td></tr>`).join('') || '<tr><td colspan="2">暂无技能</td></tr>'}
+          </table></div>
+        </div>`;
+    } catch (e) { $('snapBody').innerHTML = '<div style="color:var(--sub);padding:20px 0;">读取失败：' + esc(e.message || e) + '</div>'; }
+  }
+  function closeSnapshot(){ $('snapMask').classList.remove('show'); $('snapCard').classList.remove('show'); }
+
+  /* ---------- GitHub 学习（v3.5.0 手动入口）：空闲时手动触发一次外部学习 ---------- */
+  async function runScoutManual(){
+    const btn = $('navScout');
+    if (btn.dataset.busy) return;
+    btn.dataset.busy = '1'; btn.style.opacity = '.55';
+    const oldTitle = btn.title; btn.title = '外部学习进行中…';
+    try {
+      const r = await api('/api/scout/run', { method: 'POST' });
+      if (r && r.success) {
+        toast(`GitHub 学习完成：入库 ${r.assets || 0} 项资产（技能 ${r.skills || 0} / 基因 ${r.genes || 0}），拦截 ${r.rejected || 0} 项`);
+        openEvo(); // 打开进化中心查看明细
+      } else {
+        toast((r && r.error) || '本次学习已顺延（任务或进化实验进行中）');
+      }
+    } catch (e) { toastErr(e, '外部学习失败'); }
+    finally { delete btn.dataset.busy; btn.style.opacity = ''; btn.title = oldTitle; }
+  }
+
+  /* ---------- 快捷更新（v3.5.0）：对比 GitHub 最新 release ---------- */
+  async function checkUpdate(){
+    const btn = $('updBtn');
+    btn.disabled = true; btn.textContent = '检查中…';
+    try {
+      const d = await api('/api/update/check');
+      if (!d.success) { btn.textContent = '检查失败'; toast('更新检查失败：' + (d.error || '网络不可达或 GitHub 限流，稍后再试')); }
+      else if (d.upToDate) { btn.textContent = '已是最新'; toast(`当前 v${d.current} 已是最新版本`); }
+      else {
+        btn.textContent = '发现 v' + d.latest;
+        btn.style.color = 'var(--green,#059669)'; btn.style.borderColor = 'var(--green,#059669)';
+        toast(`发现新版本 v${d.latest}（当前 v${d.current}），即将打开发布页`);
+        setTimeout(() => { if (d.url) window.open(d.url, '_blank'); }, 600);
+      }
+    } catch (e) { btn.textContent = '检查失败'; toastErr(e, '更新检查失败'); }
+    finally { btn.disabled = false; setTimeout(() => { btn.textContent = '检查更新'; btn.style.color = ''; btn.style.borderColor = ''; }, 8000); }
+  }
+
   function closeEvo(){ $('evoMask').classList.remove('show'); $('evoDrawer').classList.remove('show'); stopLivePoll(); }
   function backToMain(){ $('liveView').style.display='none'; $('evoMain').style.display=''; stopLivePoll(); }
   const pctf = n => { const x=Number(n)||0; return (x>=0?'+':'')+(x*100).toFixed(1)+'%'; };
@@ -1063,6 +1212,9 @@
 
   /* ---------- 工作区 / 健康 / 历史恢复 ---------- */
   async function loadWorkspaces(){
+    // 工作区选择器已从侧栏移除（v3.5.0 简化：默认工作区即可满足日常使用）；
+    // API 与多工作区能力保留，仅无 UI 入口
+    if (!$('wsSelect')) return;
     const d = await api('/api/workspaces');
     if (!d.success) return;
     $('wsSelect').innerHTML = (d.workspaces||[]).map(w=>`<option value="${esc(w.name)}" ${w.current?'selected':''}>${esc(w.name)}</option>`).join('');
@@ -1079,7 +1231,7 @@
       $('healthDot').className = 'dot ' + (h.ok || h.success ? 'ok' : 'bad');
       $('healthText').textContent = h.ok || h.success ? '服务运行中' : '服务异常';
       // P2 动态版本号：从 /api/health 读取，不再硬编码
-      if (h.version) $('verBadge').textContent = 'v' + h.version;
+      if (h.version) { $('verBadge').textContent = 'v' + h.version; const fv = $('footVer'); if (fv) fv.textContent = 'v' + h.version; }
     } catch { $('healthDot').className='dot bad'; $('healthText').textContent='连接失败'; }
   }
   async function loadHistory(){

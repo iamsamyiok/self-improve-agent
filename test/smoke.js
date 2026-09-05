@@ -2296,6 +2296,34 @@ async function main() {
     const r = await (await fetch(base + '/api/health')).json();
     assert.ok(r.version && /^\d+\.\d+\.\d+/.test(r.version), 'version=' + r.version);
   });
+  await t('智能体快照：/api/agent/snapshot 聚合构成信息（无密钥泄漏）', async () => {
+    const r = await (await fetch(base + '/api/agent/snapshot')).json();
+    assert.ok(r.success, '接口成功');
+    assert.ok(r.version && r.model !== undefined && r.session && Array.isArray(r.plugins) && Array.isArray(r.skills), '版本/模型/会话/插件/技能字段齐全');
+    assert.ok(typeof r.systemPrompt === 'string' && r.systemPrompt.includes('你是 HWJ Agent'), '系统提示词全文返回且含身份锚定');
+    assert.ok(!JSON.stringify(r).includes('sk-'), '响应不含任何密钥明文');
+    assert.ok(r.session.budgetTokens > 0 && r.session.contextWindow > 0, '上下文预算数据来自 lib/limits');
+  });
+  await t('快捷更新：/api/update/check 返回版本对比结构', async () => {
+    const r = await (await fetch(base + '/api/update/check')).json();
+    // 环境匿名 GitHub API 可能限流（success=false + error）；成功时必有 current 且 latest 拿不到不会假报「已是最新」
+    if (r.success) assert.ok(r.current && typeof r.upToDate === 'boolean' && r.latest, 'current=' + r.current + ' latest=' + r.latest);
+    else assert.ok(r.current && r.error, '限流/网络不可达时返回 error 说明');
+  });
+  await t('透明化侧栏：快照/GitHub 学习/更新接线 + 工作区选择器移除（静态防回归）', () => {
+    const html = fs.readFileSync(path.join(ROOT, 'public', 'index.html'), 'utf8');
+    assert.ok(html.includes('openSnapshot()') && html.includes('id="snapCard"'), '快照菜单与面板存在');
+    assert.ok(html.includes('智能体快照'), '快照菜单文案存在');
+    assert.ok(html.includes('runScoutManual()'), 'GitHub 学习手动入口存在');
+    assert.ok(html.includes("api('/api/scout/run'"), '学习入口调用 runScout API');
+    assert.ok(html.includes('checkUpdate()') && html.includes('/api/update/check'), '检查更新接线存在');
+    assert.ok(html.includes('id="footVer"'), '侧栏底部版本号存在');
+    assert.ok(!html.includes('id="wsSelect"'), '工作区选择器已从侧栏移除');
+    assert.ok(html.includes('sb-sec">任务执行') && html.includes('sb-sec">自我改进') && html.includes('sb-sec">成长指标'), '侧栏按任务执行/自我改进/成长指标三层组织');
+    // 菜单项都有科学说明（title 提示）
+    assert.ok(html.includes('title="查看当前执行智能体的构成'), '快照菜单含说明');
+    assert.ok(html.includes('title="手动执行一次 GitHub 外部学习'), '学习菜单含说明');
+  });
   await t('P0-P3 前端静态防回归：交互元素接线', () => {
     const html = fs.readFileSync(path.join(ROOT, 'public', 'index.html'), 'utf8');
     // 撤回按钮已按用户反馈移除（接口保留）；断言防回归：前端不再出现撤回入口

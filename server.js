@@ -1652,6 +1652,65 @@ const server = http.createServer(async (req, res) => {
       json(res, 200, require('./lib/scout').scoutStatus());
       return;
     }
+    // 智能体快照（v3.5.0 透明化）：当前执行智能体的版本、模型、提示词、插件、技能、
+    // 会话统计与进化状态一屏可见——让用户对「正在干活的智能体是什么构成」有直接认知。
+    // 只读聚合，不含任何密钥明文（base_url 只给域名）
+    if (p === '/api/agent/snapshot' && req.method === 'GET') {
+      try {
+        const evo = require('./lib/evolution');
+        const limits = require('./lib/limits');
+        const evoLlmSrc = (() => { try { return evo.evoLlmSource(); } catch { return 'inner'; } })();
+        const st = (() => { try { return evo.status(); } catch { return {}; } })();
+        const cfgSnap = getConfig();
+        const wsDir = workspaceDir();
+        let host = '';
+        try { host = cfgSnap.inner.base_url ? new URL(cfgSnap.inner.base_url).host : ''; } catch { host = ''; }
+        const pluginRows = plugins.listPlugins().map(x => ({ name: x.name, desc: x.desc || '', essential: !!x.essential, status: x.status || 'loaded', source: x.source || '' }));
+        const skills = (() => { try { return require('./plugins/skill').listAll({ cwd: WS_DIR }); } catch { return []; } })();
+        const toolCalls = innerMessages.filter(m => m.role === 'tool').length;
+        let estTokens = 0;
+        try { estTokens = require('./lib/inner').estimateMessagesTokens(innerMessages); } catch { /* 估算失败按 0 */ }
+        json(res, 200, {
+          success: true,
+          version: APP_VERSION,
+          uptimeSec: Math.floor(process.uptime()),
+          running: !!(innerLock || outerLock),
+          model: { host, model: cfgSnap.inner.model || '', llmSource: evoLlmSrc, embedding: !!(cfgSnap.embedding && cfgSnap.embedding.base_url) },
+          evolution: {
+            version: (st.state && st.state.version) || 0,
+            activeMutation: (st.state && st.state.activeMutation) ? (st.state.activeMutation.id || st.state.activeMutation.type || 'active') : null,
+            health: st.health ? st.health.score : null,
+            benchmarks: st.benchmarks || 0,
+            experiments: (st.history && st.history.length) || 0
+          },
+          session: {
+            messages: innerMessages.length,
+            toolCalls,
+            estTokens,
+            budgetTokens: limits.INPUT_BUDGET_TOKENS,
+            contextWindow: limits.CTX_TOKENS
+          },
+          plugins: pluginRows,
+          skills: skills.map(s => ({ name: s.name, desc: s.desc || '' })),
+          systemPrompt: buildInnerSystemPrompt(wsDir)
+        });
+      } catch (e) { json(res, 500, { success: false, error: String((e && e.message) || e) }); }
+      return;
+    }
+    // 快捷更新检查（v3.5.0）：对比 GitHub latest release 与本地版本（匿名 API，8s 超时）
+    if (p === '/api/update/check' && req.method === 'GET') {
+      const cur = APP_VERSION;
+      fetch('https://api.github.com/repos/iamsamyiok/self-improve-agent/releases/latest', { headers: { 'User-Agent': 'hwj-agent' }, signal: AbortSignal.timeout(8000) })
+        .then(r => r.json())
+        .then(d => {
+          const latest = String(d.tag_name || '').replace(/^v/, '');
+          if (!latest) throw new Error(d.message || 'GitHub 返回为空（可能限流，稍后再试）');
+          const cmp = (a, b) => { const pa = String(a).split('.'), pb = String(b).split('.'); for (let i = 0; i < 3; i++) { const x = parseInt(pa[i], 10) || 0, y = parseInt(pb[i], 10) || 0; if (y > x) return 1; if (y < x) return -1; } return 0; };
+          json(res, 200, { success: true, current: cur, latest, upToDate: cmp(cur, latest) >= 0, url: d.html_url || '', name: d.name || '' });
+        })
+        .catch(e => json(res, 200, { success: false, current: cur, error: String((e && e.message) || e) }));
+      return;
+    }
     if (p === '/api/reinforce/status' && req.method === 'GET') {
       json(res, 200, require('./lib/reinforce').reinforceStatus());
       return;

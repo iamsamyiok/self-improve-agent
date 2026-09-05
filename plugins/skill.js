@@ -473,3 +473,4 @@ module.exports = {
 module.exports.promptSection = promptSection;
 module.exports.matchSkills = matchSkills;
 module.exports.skillMatchTokens = skillMatchTokens;
+module.exports.listAll = listAll;
