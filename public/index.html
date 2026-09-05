@@ -993,7 +993,7 @@
       const rows = d.rows || [];
       let body = '';
       if (kind === 'benchmarks') {
-        body = rows.map(b => `<div class="ad-item"><b>${esc(b.task) || '（未知任务）'}</b><span>${b.hard ? '<i class="ad-hard">难例</i>' : ''}${b.repairs ? `返修 ${b.repairs} 次 · ` : ''}${esc(String(b.createdAt || '').slice(0, 10))}</span></div>`).join('');
+        body = rows.map(b => `<div class="ad-item"><b>${esc(b.task) || '（未知任务）'}</b><span>${b.hard ? '<i class="ad-hard">难例</i>' : ''}${b.divergent ? '<i class="ad-hard" style="color:var(--green,#059669);border-color:var(--green,#059669);">背离</i>' : ''}${b.repairs ? `返修 ${b.repairs} 次 · ` : ''}${esc(String(b.createdAt || '').slice(0, 10))}</span></div>`).join('');
       } else if (kind === 'experiments') {
         body = rows.map(x => x.expired
           ? `<div class="ad-item ad-expired"><b>档案已过期（超过 30 天已清理）</b><span>${esc(String(x.id).slice(0, 24))} · ${esc(String(x.date || '').slice(0, 10))}</span></div>`

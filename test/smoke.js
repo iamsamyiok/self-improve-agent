@@ -2346,6 +2346,36 @@ async function main() {
     assert.ok(!html.includes('id="evoSampleText"') && !html.includes('id="evoExpText"'), '旧样本/实验计数指标已移除');
     assert.ok(html.includes("onclick=\"openEvo()\" title=\"健康分与首过率反映进化质量"), '指标区点击进进化中心看明细');
   });
+  await t('CoE 组合反馈通道：收尾自评 + 背离样本加权（arXiv 2608.18027 借鉴）', () => {
+    const srv = fs.readFileSync(path.join(ROOT, 'server.js'), 'utf8');
+    const intent = fs.readFileSync(path.join(ROOT, 'plugins', 'intent.js'), 'utf8');
+    const evo = fs.readFileSync(path.join(ROOT, 'lib', 'evolution.js'), 'utf8');
+    // 双反馈通道互补：intent 插件提供 self-review，server 收尾接线
+    assert.ok(intent.includes("case 'self-review'") && intent.includes('selfReviewOperation'), 'intent 插件提供 self-review action');
+    assert.ok(intent.includes('completeness') && intent.includes('只输出 JSON'), '自评输出结构化 JSON（completeness）');
+    assert.ok(intent.includes('return \'\';'), '自评通道故障静默返回空（环境核验独立兜底）');
+    assert.ok(srv.includes("action: 'self-review'"), 'server 收尾调用自评通道');
+    assert.ok(srv.includes('const divergent = (sr.completeness >= 85 && hasUnresolvedGaps)'), '背离判定：自评高但核验未过');
+    assert.ok(srv.includes('sr.completeness < 50 && !hasUnresolvedGaps && repairCount === 0'), '背离判定：自评低但零返修 PASS');
+    assert.ok(srv.includes('if (repairCount > 0 || multiStep)'), '仅返修或多步任务自评（简单任务省一次 LLM 调用）');
+    assert.ok(srv.includes('recordTaskOutcome({ success: !hasUnresolvedGaps, repairs: repairCount, hard: repairCount > 0, durationMs: Date.now() - taskT0, task: message, selfReview })'), '自评结果落 eval-events');
+    assert.ok(srv.includes('allGaps: gapsSeen.slice(0, 8), selfReview }'), '自评结果进 benchmark');
+    // 进化侧：背离样本最优先重放
+    assert.ok(evo.includes('const divergent = [], hardFresh = []'), 'rankHardFirst 设 divergent 独立段');
+    assert.ok(evo.includes('[...byTime(divergent), ...byTime(hardFresh)'), '背离样本排在 hard 难例之前');
+    assert.ok(evo.includes('rec.selfReview = { completeness: input.selfReview.completeness, divergent: !!input.selfReview.divergent }'), 'benchmark case 持久化 selfReview');
+    assert.ok(evo.includes('divergent: !!(b.selfReview && b.selfReview.divergent)'), '进化明细输出背离标志');
+  });
+  await t('CoE 同任务经验链：黑板经验链格式（尝试 N：动作→反馈→学到）', () => {
+    const srv = fs.readFileSync(path.join(ROOT, 'server.js'), 'utf8');
+    assert.ok(srv.includes('## 经验链'), '黑板骨架含经验链小节');
+    assert.ok(srv.includes('- 尝试 N：动作 → 反馈 → 学到'), '经验链条目格式（动作→反馈→学到）');
+    assert.ok(srv.includes('中途失败重试后必须记录，后续步骤先读经验链避免重复踩坑'), '失败重试强制入链 + 先读链防重复踩坑');
+    assert.ok(srv.includes('把本轮返修以「- 尝试 N：动作 → 反馈 → 学到」追加到黑板'), '返修轮次显式入链（修复循环 = 经验链迭代）');
+    // 旧黑板纪律断言不回归
+    assert.ok(srv.includes('三项纪律') && srv.includes('黑板纪律'), '多步纪律与黑板纪律保留');
+    assert.ok(srv.includes('slice(0, 1500)'), '黑板注记截断预算保留');
+  });
   await t('P0-P3 前端静态防回归：交互元素接线', () => {
     const html = fs.readFileSync(path.join(ROOT, 'public', 'index.html'), 'utf8');
     // 撤回按钮已按用户反馈移除（接口保留）；断言防回归：前端不再出现撤回入口

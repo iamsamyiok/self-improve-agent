@@ -697,10 +697,10 @@ const { matchSmallTalk } = require('./lib/smalltalk');
         try {
           const bb = path.join(WS_DIR, 'task-state.md');
           // 新多步任务开始即重写黑板（覆盖上一任务的残留状态，防串任务）
-          fs.writeFileSync(bb, `# 任务黑板\n\n## 目标\n${String(message).slice(0, 500)}\n\n## 状态\n- [ ] 待更新（执行中每完成一步必须更新本文件）\n\n## 关键发现\n（执行中记录）\n`, 'utf8');
+          fs.writeFileSync(bb, `# 任务黑板\n\n## 目标\n${String(message).slice(0, 500)}\n\n## 状态\n- [ ] 待更新（执行中每完成一步必须更新本文件）\n\n## 经验链\n（每完成一步追加一行：- 尝试 N：动作 → 反馈 → 学到；中途失败重试后必须记录，后续步骤先读经验链避免重复踩坑）\n\n## 关键发现\n（执行中记录）\n`, 'utf8');
           send({ type: 'info', text: '已创建任务黑板 task-state.md' });
         } catch { /* 黑板预创建失败不影响任务 */ }
-        finalMsg = message + '\n\n[框架提示] 本任务为多步任务，三项纪律：\n1) 开始执行前必须先用 todo 建任务清单（每个步骤一条 todo.add），每完成一步立即 todo.toggle(id=...)，全部完成时清单应全为 [x]。\n2) 收尾前必须用 verify 插件断言每个产出文件（exists + contains 内容特征 + line_count），看到 FAIL 先修复再重验，全 PASS 才能总结。\n3) 黑板纪律：框架已在 ' + WS_DIR + '/task-state.md 创建黑板文件（含任务目标），执行中每完成一个步骤必须立即更新它（勾改状态、记录产出文件路径与关键发现）。更新方式优先用 write 全量重写整个黑板（黑板文件已豁免覆盖保护，直接重发更新后的完整内容即可）；用 edit 必须先 read 确认最新内容再逐字符复制；框架每轮会把黑板内容注记给你——上下文被折叠后以黑板为准，先看黑板再行动。注意：黑板绝对路径是 ' + WS_DIR + '/task-state.md，禁止写到其他目录。';
+        finalMsg = message + '\n\n[框架提示] 本任务为多步任务，三项纪律：\n1) 开始执行前必须先用 todo 建任务清单（每个步骤一条 todo.add），每完成一步立即 todo.toggle(id=...)，全部完成时清单应全为 [x]。\n2) 收尾前必须用 verify 插件断言每个产出文件（exists + contains 内容特征 + line_count），看到 FAIL 先修复再重验，全 PASS 才能总结。\n3) 黑板纪律：框架已在 ' + WS_DIR + '/task-state.md 创建黑板文件（含任务目标），执行中每完成一个步骤必须立即更新它（勾改状态、记录产出文件路径与关键发现），并在「经验链」小节追加一行「- 尝试 N：动作 → 反馈 → 学到 X」（尤其中途失败重试后必须记录，后续步骤先读经验链避免重复踩坑）。更新方式优先用 write 全量重写整个黑板（黑板文件已豁免覆盖保护，直接重发更新后的完整内容即可）；用 edit 必须先 read 确认最新内容再逐字符复制；框架每轮会把黑板内容注记给你——上下文被折叠后以黑板为准，先看黑板再行动。注意：黑板绝对路径是 ' + WS_DIR + '/task-state.md，禁止写到其他目录。';
         send({ type: 'info', text: '检测到多步任务，已注入任务清单+产出验证+黑板提醒' });
       }
       // 长文创作任务（v0.9.17 病根：模型以"万字超单次输出限制"为由直接拒绝——
@@ -1114,7 +1114,7 @@ const { matchSmallTalk } = require('./lib/smalltalk');
           break;
         }
         repairCount++;
-       const repairMsg = `[交付核验] 对照意图契约发现以下未满足项：\n${gaps.map((g, i) => `${i + 1}. ${g}`).join('\n')}\n请立即针对性修复上述缺口（已满足的项不要重做），完成后重新交付总结。`;
+       const repairMsg = `[交付核验] 对照意图契约发现以下未满足项：\n${gaps.map((g, i) => `${i + 1}. ${g}`).join('\n')}\n请立即针对性修复上述缺口（已满足的项不要重做），并把本轮返修以「- 尝试 N：动作 → 反馈 → 学到」追加到黑板 task-state.md 的经验链小节（N 接续既有条目编号），完成后重新交付总结。`;
        innerMessages.push({ role: 'user', content: repairMsg });
        persistInnerMessages();
        send({ type: 'info', text: `[交付核验] 发现 ${gaps.length} 项缺口，自动返修（第 ${r + 1}/${MAX_REPAIR} 轮）` });
@@ -1127,18 +1127,35 @@ const { matchSmallTalk } = require('./lib/smalltalk');
       if (!String(lastAnswer).includes('[交付核验缺口标注]')) {
         plugins.runPlugin('memory', { action: 'archive_save', user: String(message || ''), finalText: String(lastAnswer || '').slice(0, 4000) }, { cwd: WS_DIR, dataDir: DATA_DIR }).catch(() => {});
       }
-      // 成功任务自动进入 Evolution Benchmark Ledger（与 TUI 同一套账本）；
+       // 成功任务自动进入 Evolution Benchmark Ledger（与 TUI 同一套账本）；
       // 返修后 PASS 的标记 hard 难例；上限仍未过的只进缺口经验池。
       // 这里只记录任务与可观测产出，真正的评分必须在未来 replay 时重新执行。
        const hasUnresolvedGaps = String(lastAnswer).includes('[交付核验缺口标注]');
+       // CoE 组合反馈通道（借鉴 arXiv 2608.18027）：环境核验之外的模型自反馈。
+       // 返修或多步任务才自评（简单零返修任务 verify 已足够可信，省一次 LLM 调用）；
+       // 自评与实测背离 = 最高价值进化样本，落 divergent 供选样加权。
+       let selfReview = null;
+       if (repairCount > 0 || multiStep) {
+         try {
+           const srRaw = await plugins.runPlugin('intent', { action: 'self-review', task: String(message || '').slice(0, 2000), finalAnswer: String(lastAnswer || '').slice(0, 2000) }, { cwd: WS_DIR, dataDir: DATA_DIR, config: CONFIG_PATH });
+           if (typeof srRaw === 'string' && srRaw.startsWith('{')) {
+             const sr = JSON.parse(srRaw);
+             if (sr && typeof sr.completeness === 'number') {
+               const divergent = (sr.completeness >= 85 && hasUnresolvedGaps) || (sr.completeness < 50 && !hasUnresolvedGaps && repairCount === 0);
+               selfReview = { completeness: sr.completeness, doubts: String(sr.doubts || '无').slice(0, 200), divergent };
+               appendProcess(`\n> 自查通道：完成度 ${sr.completeness}%${divergent ? '（自评与实测背离，已标记为高价值进化样本）' : ''}${sr.doubts && sr.doubts !== '无' ? ` · 存疑：${sr.doubts}` : ''}\n`);
+             }
+           }
+         } catch { /* 自评失败不影响交付，环境核验仍兜底 */ }
+       }
        try {
          const evolution = require('./lib/evolution');
          // 效果评估：任务完成信号（success=验收闭环通过；repairs>0 即 hard 难例）
-         evolution.recordTaskOutcome({ success: !hasUnresolvedGaps, repairs: repairCount, hard: repairCount > 0, durationMs: Date.now() - taskT0, task: message });
+         evolution.recordTaskOutcome({ success: !hasUnresolvedGaps, repairs: repairCount, hard: repairCount > 0, durationMs: Date.now() - taskT0, task: message, selfReview });
          const intent = getCurrentIntent();
         if (!hasUnresolvedGaps) {
           // 返修后最终 PASS 的任务是最有价值的难例：repairs>0 会被标记 hard，进化时优先重放
-          evolution.recordBenchmark({ task: message, finalText: lastAnswer, ws: currentWorkspace(), intent, artifacts: evolution.artifactManifest(WS_DIR), repairs: repairCount, lastGaps: [], allGaps: gapsSeen.slice(0, 8) });
+          evolution.recordBenchmark({ task: message, finalText: lastAnswer, ws: currentWorkspace(), intent, artifacts: evolution.artifactManifest(WS_DIR), repairs: repairCount, lastGaps: [], allGaps: gapsSeen.slice(0, 8), selfReview });
         } else {
           // 上限仍未过的任务可能本身不可完成，不入 benchmark（避免不可达任务压扁 A/B），
           // 但缺口原文进经验池，供 Meta-Agent 提炼 skill mutation 时参考

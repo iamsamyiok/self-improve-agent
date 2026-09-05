@@ -207,6 +207,32 @@ async function verifyDeliverablesOperation(args, ctx) {
   return '核验结果：PASS\n\n意图契约全部条款满足';
 }
 
+// ---------- 收尾自评（组合反馈通道，借鉴 CoE arXiv 2608.18027）----------
+// 环境核验（verify/judge）之外的模型自反馈：对照目标自评交付覆盖度。
+// 自评与实测背离（自评高但核验仍有缺口 / 自评低但零返修 PASS）的样本是最高价值
+// 进化样本，由 server 侧落 divergent 标记供进化选样加权。通道故障静默返回空串，
+// 环境核验仍独立兜底——两个反馈通道互补，任何一路失效不拖垮另一路。
+async function selfReviewOperation(args, ctx) {
+  const task = String(args.task || '').slice(0, 2000);
+  const finalAnswer = String(args.finalAnswer || '').slice(0, 2000);
+  if (!task || !finalAnswer) return '';
+  try {
+    const cfg = ctx.config ? JSON.parse(fs.readFileSync(ctx.config, 'utf8')) : null;
+    if (!cfg || !cfg.inner || !cfg.inner.base_url) return '';
+    const text = await callLLMText(cfg.inner, [
+      { role: 'system', content: '你是执行者自查通道，只输出 JSON。' },
+      { role: 'user', content: `对照用户原始目标与最终交付，从语义完备性视角严格自查（环境工具已另行核验文件存在性，你负责判断内容是否真正满足目标）：\n\n【用户目标】\n${task}\n\n【最终交付】\n${finalAnswer}\n\n输出 JSON，禁止其他文字：\n{"completeness": <0-100 整数，交付对目标的覆盖度>, "doubts": "<最大存疑点，无则写：无>", "oneLine": "<一句话自评>"}` }
+    ], { maxTokens: 300, label: '执行自查' });
+    const m = String(text || '').match(/\{[\s\S]*\}/);
+    if (!m) return '';
+    const j = JSON.parse(m[0]);
+    const completeness = Math.max(0, Math.min(100, Number(j.completeness) || 0));
+    return JSON.stringify({ completeness, doubts: String(j.doubts || '无').slice(0, 200), oneLine: String(j.oneLine || '').slice(0, 120) });
+  } catch {
+    return '';
+  }
+}
+
 // ---------- 获取意图注记 ----------
 function getIntentNote() {
   if (!state.intent) return '';
@@ -303,8 +329,8 @@ module.exports = {
     properties: {
       action: { 
         type: 'string', 
-        enum: ['extract', 'view', 'clear', 'verify'],
-        description: '操作类型：extract=抽取意图契约, view=查看当前意图, clear=清除意图, verify=核验交付物'
+        enum: ['extract', 'view', 'clear', 'verify', 'self-review'],
+        description: '操作类型：extract=抽取意图契约, view=查看当前意图, clear=清除意图, verify=核验交付物, self-review=收尾自评（组合反馈通道）'
       },
       task: { 
         type: 'string', 
@@ -330,8 +356,10 @@ module.exports = {
         return clearIntentOperation(args, ctx);
       case 'verify':
         return await verifyDeliverablesOperation(args, ctx);
+      case 'self-review':
+        return await selfReviewOperation(args, ctx);
       default:
-        return `未知操作：${action}\n可用操作：extract, view, clear, verify`;
+        return `未知操作：${action}\n可用操作：extract, view, clear, verify, self-review`;
     }
   },
   
