@@ -2322,7 +2322,29 @@ async function main() {
     assert.ok(html.includes('sb-sec">任务执行') && html.includes('sb-sec">自我改进') && html.includes('sb-sec">成长指标'), '侧栏按任务执行/自我改进/成长指标三层组织');
     // 菜单项都有科学说明（title 提示）
     assert.ok(html.includes('title="查看当前执行智能体的构成'), '快照菜单含说明');
-    assert.ok(html.includes('title="手动执行一次 GitHub 外部学习'), '学习菜单含说明');
+    assert.ok(html.includes('title="打开 GitHub 学习面板'), '学习菜单含说明');
+  });
+  await t('GitHub 学习面板：可视化操作页（状态/说明/开始按钮/最近记录）', () => {
+    const html = fs.readFileSync(path.join(ROOT, 'public', 'index.html'), 'utf8');
+    assert.ok(html.includes('id="scoutCard"') && html.includes('id="scoutMask"'), '学习面板 DOM 存在');
+    assert.ok(html.includes('id="scoutStartBtn"') && html.includes('startScout()'), '开始学习按钮与函数存在');
+    assert.ok(html.includes('id="scoutStat"'), '学习状态行存在');
+    assert.ok(html.includes('id="scoutRecent"') && html.includes('renderScoutStatus'), '最近学习记录区与渲染函数存在');
+    assert.ok(html.includes("api('/api/scout/status'"), '面板读取 scout 状态 API');
+    assert.ok(html.includes('今日 ${s.todayAssets || 0}/${s.dailyGoal || 5} 项'), '状态含每日进度与预算');
+    assert.ok(html.includes('基因 · 待 A/B'), '基因条目标注待 A/B 验证（免检特权豁免语义）');
+    assert.ok(html.includes('技能 · 已生效'), '技能条目标注已生效');
+    assert.ok(html.includes('closeScout()'), '面板关闭接线存在');
+  });
+  await t('成长指标升级：健康分+趋势/首过率/能力资产（替代样本实验计数）', () => {
+    const html = fs.readFileSync(path.join(ROOT, 'public', 'index.html'), 'utf8');
+    assert.ok(html.includes('id="evoHealthText"') && html.includes('id="evoDotHealth"'), '健康分指标存在');
+    assert.ok(html.includes("healthTrend[st.healthTrend.length - 1].score - st.healthTrend[st.healthTrend.length - 2].score"), '趋势箭头取自 healthTrend 相邻版本差值');
+    assert.ok(html.includes('id="evoPassText"') && html.includes('首过率 '), '基准首过率指标存在');
+    assert.ok(html.includes("id=\"evoAssetText\"") && html.includes('技能 ${am.skills || 0} · 基因 ${am.enabledGenes || 0}'), '能力资产指标=技能数+启用基因数');
+    assert.ok(html.includes("score >= 80 ? 'ok' : score >= 60 ? '' : 'bad'"), '健康分三档着色');
+    assert.ok(!html.includes('id="evoSampleText"') && !html.includes('id="evoExpText"'), '旧样本/实验计数指标已移除');
+    assert.ok(html.includes("onclick=\"openEvo()\" title=\"健康分与首过率反映进化质量"), '指标区点击进进化中心看明细');
   });
   await t('P0-P3 前端静态防回归：交互元素接线', () => {
     const html = fs.readFileSync(path.join(ROOT, 'public', 'index.html'), 'utf8');

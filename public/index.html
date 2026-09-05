@@ -265,6 +265,12 @@
   #snapMask.show { display:block; }
   #snapCard { position:fixed; z-index:73; left:50%; top:6%; transform:translateX(-50%); width:min(720px, calc(100vw - 28px)); max-height:84vh; overflow:auto; background:var(--side,#171C22); border:1px solid var(--border,#262C33); border-radius:16px; padding:18px 18px 14px; display:none; box-shadow:0 18px 60px rgba(0,0,0,.4); }
   #snapCard.show { display:block; }
+  #scoutMask { position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:72; display:none; }
+  #scoutMask.show { display:block; }
+  #scoutCard { position:fixed; z-index:73; left:50%; top:8%; transform:translateX(-50%); width:min(560px, calc(100vw - 28px)); max-height:80vh; overflow:auto; background:var(--side,#171C22); border:1px solid var(--border,#262C33); border-radius:16px; padding:18px 18px 14px; display:none; box-shadow:0 18px 60px rgba(0,0,0,.4); }
+  #scoutCard.show { display:block; }
+  .scout-row { display:flex; justify-content:space-between; align-items:center; gap:10px; padding:9px 11px; border:1px solid var(--border,#262C33); border-radius:10px; margin-bottom:6px; font-size:13px; }
+  .scout-form { font-size:11px; padding:2px 9px; border-radius:8px; border:1px solid var(--border,#262C33); color:var(--sub,#8b949e); white-space:nowrap; flex-shrink:0; }
   .snap-body { font-size:13px; }
   .snap-sec { border:1px solid var(--border); border-radius:11px; padding:12px 14px; margin-bottom:10px; }
   .snap-sec > b.snap-title { display:block; font-size:12px; color:var(--text-3); letter-spacing:.4px; margin-bottom:8px; }
@@ -337,7 +343,7 @@
         进化中心
         <span class="ni-badge" id="navEvoBadge">v0</span>
       </div>
-      <div class="nav-item" id="navScout" onclick="runScoutManual()" title="手动执行一次 GitHub 外部学习：从高星 Agent 项目提炼可借鉴机制，技能硬校验入库、行为基因走 A/B 验证">
+      <div class="nav-item" id="navScout" onclick="runScoutManual()" title="打开 GitHub 学习面板：查看学习状态与最近记录，或手动触发一次外部学习">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>
         GitHub 学习
       </div>
@@ -346,9 +352,10 @@
         帮助
       </div>
       <div class="sb-sec">成长指标</div>
-      <div style="padding:2px 10px;">
-        <div class="health" style="margin-top:2px;"><span class="dot" id="evoDotSample"></span><span id="evoSampleText">样本 0</span></div>
-        <div class="health"><span class="dot" id="evoDotExp"></span><span id="evoExpText">实验 0 次</span></div>
+      <div style="padding:2px 10px;cursor:pointer;" onclick="openEvo()" title="健康分与首过率反映进化质量，技能/基因为能力资产；点击查看明细">
+        <div class="health" style="margin-top:2px;"><span class="dot" id="evoDotHealth"></span><span id="evoHealthText">健康 —</span></div>
+        <div class="health"><span class="dot" id="evoDotPass"></span><span id="evoPassText">首过率 —</span></div>
+        <div class="health"><span class="dot" id="evoDotAsset"></span><span id="evoAssetText">技能 — · 基因 —</span></div>
       </div>
     </nav>
     <div class="sb-foot">
@@ -421,6 +428,22 @@
     <button class="ed-close" style="margin-left:auto;" onclick="closeSnapshot()" aria-label="关闭">✕</button>
   </div>
   <div id="snapBody" class="snap-body"><div style="color:var(--sub);padding:24px 0;text-align:center;">正在读取当前智能体构成…</div></div>
+</div>
+
+<!-- GitHub 学习面板（v3.5.1）：手动触发的可视化操作页，含状态、说明与最近学习记录 -->
+<div id="scoutMask" onclick="closeScout()"></div>
+<div id="scoutCard" role="dialog" aria-label="GitHub 学习">
+  <div class="su-head">
+    <b>GitHub 学习</b>
+    <span class="tag b" style="margin-left:2px;">外部学习</span>
+    <button class="ed-close" style="margin-left:auto;" onclick="closeScout()" aria-label="关闭">✕</button>
+  </div>
+  <p style="font-size:12.5px;color:var(--sub,#8b949e);margin:10px 0;line-height:1.6;">扫描高星 Agent 开源项目，提炼可借鉴机制入库：<b>技能</b>经硬校验后直接生效；<b>行为基因</b>先进入 A/B 实验验证，达标才启用。外部经验不享有免检特权。</p>
+  <div style="display:flex;gap:10px;align-items:center;margin:0 0 12px;flex-wrap:wrap;">
+    <button id="scoutStartBtn" class="btn-main" style="padding:8px 18px;" onclick="startScout()">开始学习</button>
+    <span id="scoutStat" style="font-size:12.5px;color:var(--sub,#8b949e);">正在读取学习状态…</span>
+  </div>
+  <div id="scoutRecent"></div>
 </div>
 
 <!-- 模型配置弹窗（首启未配置自动弹出；?setup=1 强制弹出） -->
@@ -880,21 +903,44 @@
   function closeSnapshot(){ $('snapMask').classList.remove('show'); $('snapCard').classList.remove('show'); }
 
   /* ---------- GitHub 学习（v3.5.0 手动入口）：空闲时手动触发一次外部学习 ---------- */
+  /* ---------- GitHub 学习面板（v3.5.1）：可视化操作页 ---------- */
+  function closeScout(){ $('scoutMask').classList.remove('show'); $('scoutCard').classList.remove('show'); }
   async function runScoutManual(){
-    const btn = $('navScout');
-    if (btn.dataset.busy) return;
-    btn.dataset.busy = '1'; btn.style.opacity = '.55';
-    const oldTitle = btn.title; btn.title = '外部学习进行中…';
+    $('scoutMask').classList.add('show'); $('scoutCard').classList.add('show');
+    $('scoutStartBtn').disabled = false; $('scoutStartBtn').textContent = '开始学习';
+    $('scoutStat').textContent = '正在读取学习状态…';
+    $('scoutRecent').innerHTML = '';
+    const s = await api('/api/scout/status');
+    if (!s || !s.success) { $('scoutStat').textContent = '学习状态加载失败'; return; }
+    renderScoutStatus(s);
+  }
+  function renderScoutStatus(s){
+    const t = s.totals || {};
+    const last = s.lastSuccessAt ? new Date(s.lastSuccessAt).toLocaleString() : '从未';
+    $('scoutStat').textContent = `今日 ${s.todayAssets || 0}/${s.dailyGoal || 5} 项 · 累计入库 技能 ${t.skills || 0} · 基因 ${t.genes || 0} · 上次成功 ${last}`;
+    const rec = s.recent || [];
+    $('scoutRecent').innerHTML = rec.length
+      ? rec.map(r => `<div class="scout-row"><div style="min-width:0;"><div style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(r.mechanism || r.repo || '未命名机制')}</div><div style="font-size:11.5px;color:var(--sub,#8b949e);margin-top:2px;">${esc(r.date || '')} · 来源 ${esc(r.repo || '—')}</div></div><span class="scout-form">${r.form === 'gene' ? '基因 · 待 A/B' : '技能 · 已生效'}</span></div>`).join('')
+      : '<div style="font-size:12.5px;color:var(--sub,#8b949e);padding:6px 2px;">暂无学习记录，点击「开始学习」完成第一次外部学习。</div>';
+  }
+  async function startScout(){
+    const btn = $('scoutStartBtn');
+    if (btn.disabled) return;
+    btn.disabled = true; btn.textContent = '学习中…';
+    $('scoutStat').textContent = '正在扫描与提炼（约需几分钟），请保持面板打开…';
     try {
       const r = await api('/api/scout/run', { method: 'POST' });
       if (r && r.success) {
-        toast(`GitHub 学习完成：入库 ${r.assets || 0} 项资产（技能 ${r.skills || 0} / 基因 ${r.genes || 0}），拦截 ${r.rejected || 0} 项`);
-        openEvo(); // 打开进化中心查看明细
+        toast(`GitHub 学习完成：入库 技能 ${r.skills || 0} · 基因 ${r.genes || 0}，拦截 ${r.rejected || 0} 项`);
+        const s = await api('/api/scout/status');
+        if (s && s.success) renderScoutStatus(s);
+        refreshEvo();
       } else {
-        toast((r && r.error) || '本次学习已顺延（任务或进化实验进行中）');
+        $('scoutStat').textContent = (r && r.error) || '本次学习未完成';
+        toast((r && r.error) || '本次学习已顺延');
       }
-    } catch (e) { toastErr(e, '外部学习失败'); }
-    finally { delete btn.dataset.busy; btn.style.opacity = ''; btn.title = oldTitle; }
+    } catch (e) { toastErr(e, '外部学习失败'); $('scoutStat').textContent = '学习请求失败'; }
+    finally { btn.disabled = false; btn.textContent = '开始学习'; }
   }
 
   /* ---------- 快捷更新（v3.5.0）：对比 GitHub 最新 release ---------- */
@@ -1053,8 +1099,7 @@
     const st = await api('/api/evolution/status');
     if (!st.success) return;
     const h = st.history || [], state = st.state || {};
-    const benchmarks = Number(st.benchmarks)||0, min = Number(st.minBenchmarks)||3;
-    const promoted = h.filter(x=>x.promotion&&x.promotion.ok).length;
+    const benchmarks = Number(st.benchmarks)||0;
     const version = state.version || 0;
     // 顶栏 pill：健康度 + 经验资产两个核心数字（版本/样本/实验细节收进抽屉）
     const healthTxt = (st.health && typeof st.health.score === 'number') ? `健康 ${st.health.score} · ` : '';
@@ -1062,10 +1107,17 @@
     $('evoPillText').textContent = st.running ? '进化实验进行中' : `${healthTxt}资产 ${assetTotal}`;
     $('evoPulse').classList.toggle('live', !!st.running);
     $('navEvoBadge').textContent = 'v' + version;
-    $('evoSampleText').textContent = `样本 ${benchmarks}${benchmarks>=min?'（已达标）':''}`;
-    $('evoDotSample').className = 'dot ' + (benchmarks>=min?'ok':'');
-    $('evoExpText').textContent = `实验 ${h.length} 次 · 晋级 ${promoted}`;
-    $('evoDotExp').className = 'dot ' + (promoted?'ok':'');
+    // 侧栏成长指标（v3.5.1：健康分+趋势 / 基准首过率 / 能力资产——进化质量与资产视角，比样本实验计数更有价值）
+    const score = st.health && st.health.score;
+    const tr = (Array.isArray(st.healthTrend) && st.healthTrend.length >= 2) ? (st.healthTrend[st.healthTrend.length - 1].score - st.healthTrend[st.healthTrend.length - 2].score) : 0;
+    $('evoHealthText').textContent = (typeof score === 'number' ? '健康 ' + score : '健康 —') + (tr > 0 ? ' ↑' : tr < 0 ? ' ↓' : '');
+    $('evoDotHealth').className = 'dot ' + (typeof score === 'number' ? (score >= 80 ? 'ok' : score >= 60 ? '' : 'bad') : '');
+    const fp = st.health && st.health.firstPass;
+    $('evoPassText').textContent = '首过率 ' + (typeof fp === 'number' ? Math.round(fp * 100) + '%' : '—');
+    $('evoDotPass').className = 'dot ' + (typeof fp === 'number' && fp >= 0.6 ? 'ok' : '');
+    const am = st.assets || {};
+    $('evoAssetText').textContent = `技能 ${am.skills || 0} · 基因 ${am.enabledGenes || 0}`;
+    $('evoDotAsset').className = 'dot ' + ((am.skills || 0) > 0 ? 'ok' : '');
     // 抽屉内部（v3.4.0 性能：数据快照比对，无变化跳过整块 DOM 重建——此前每 8s 重建 50 张实验卡片）
     if (!$('evoDrawer').classList.contains('show')) { renderEvo._snap = ''; return; }
     const snap = JSON.stringify(st);
