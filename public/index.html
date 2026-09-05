@@ -515,11 +515,23 @@
     const vv = window.visualViewport, app = document.getElementById('app');
     const applyKB = () => {
       const kbCover = window.innerHeight - vv.height - vv.offsetTop;
-      if (kbCover > 80) app.style.height = vv.height + 'px';
-      else app.style.height = '';
+      if (kbCover > 80) {
+        app.style.height = vv.height + 'px';
+        // 聚焦中的输入元素确保滚进可视区（软键盘上沿之上）
+        const el = document.activeElement;
+        if (el && (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT')) {
+          setTimeout(() => el.scrollIntoView({ block: 'center', behavior: 'smooth' }), 80);
+        }
+      } else app.style.height = '';
     };
     vv.addEventListener('resize', applyKB);
     vv.addEventListener('scroll', applyKB);
+    // 部分内核聚焦瞬间 resize 尚未触发/滞后：聚焦后主动查一次
+    document.addEventListener('focusin', e => {
+      if (e.target && (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT')) {
+        setTimeout(applyKB, 350);
+      }
+    });
   }
 
   function toast(m, opts) {

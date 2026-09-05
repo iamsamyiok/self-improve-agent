@@ -1292,11 +1292,13 @@ const server = http.createServer(async (req, res) => {
   }
 
   // ---------- 静态 ----------
+  // HTML 入口一律 no-cache：手机 WebView 启发式缓存会把旧页面留很久，前端修复到不了设备
+  const HTML_NO_CACHE = { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache' };
   if (req.method === 'GET' && (p === '/' || p === '/index.html')) {
     lastSeen = Date.now(); // 打开/刷新页面也算在线
     fs.readFile(path.join(ROOT, 'public', 'index.html'), (e, d) => {
       if (e) { res.writeHead(404); res.end('Not Found'); return; }
-      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+      res.writeHead(200, HTML_NO_CACHE);
       res.end(d);
     });
     return;
@@ -1305,7 +1307,7 @@ const server = http.createServer(async (req, res) => {
     lastSeen = Date.now();
     fs.readFile(path.join(ROOT, 'public', 'process.html'), (e, d) => {
       if (e) { res.writeHead(404); res.end('Not Found'); return; }
-      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+      res.writeHead(200, HTML_NO_CACHE);
       res.end(d);
     });
     return;
@@ -1314,7 +1316,7 @@ const server = http.createServer(async (req, res) => {
     lastSeen = Date.now();
     fs.readFile(path.join(ROOT, 'public', 'help.html'), (e, d) => {
       if (e) { res.writeHead(404); res.end('Not Found'); return; }
-      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+      res.writeHead(200, HTML_NO_CACHE);
       res.end(d);
     });
     return;
