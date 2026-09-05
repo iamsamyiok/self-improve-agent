@@ -1100,6 +1100,7 @@
     if (!st.success) return;
     const h = st.history || [], state = st.state || {};
     const benchmarks = Number(st.benchmarks)||0;
+    const promoted = h.filter(x=>x.promotion&&x.promotion.ok).length;
     const version = state.version || 0;
     // 顶栏 pill：健康度 + 经验资产两个核心数字（版本/样本/实验细节收进抽屉）
     const healthTxt = (st.health && typeof st.health.score === 'number') ? `健康 ${st.health.score} · ` : '';
@@ -1139,7 +1140,7 @@
     const growth = $('growthLine');
     if (growth) {
       growth.textContent = assetTotal > 0
-        ? `已积累 ${a.lessons || 0} 条经验教训 · ${a.playbooks || 0} 个执行套路 · ${a.enabledGenes || 0}/${a.genes || 0} 条启用基因，且每完成一个任务都在增长`
+        ? `已积累 ${am.lessons || 0} 条经验教训 · ${am.playbooks || 0} 个执行套路 · ${am.enabledGenes || 0}/${am.genes || 0} 条启用基因，且每完成一个任务都在增长`
         : '';
     }
     if (!st.running) { // 运行结束时轮询自动刷新（渲染由触发方处理）
