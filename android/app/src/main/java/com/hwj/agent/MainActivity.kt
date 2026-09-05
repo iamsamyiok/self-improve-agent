@@ -106,7 +106,7 @@ class MainActivity : AppCompatActivity() {
             override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
                 if (!request.isForMainFrame) return
                 showError(when (error.errorCode) {
-                    WebViewClient.ERROR_HOST_UNRESOLVED -> "服务地址无法解析。请确认地址填写正确，且手机 Tailscale 已连接。"
+                    WebViewClient.ERROR_HOST_LOOKUP -> "服务地址无法解析。请确认地址填写正确，且手机 Tailscale 已连接。"
                     WebViewClient.ERROR_CONNECT, WebViewClient.ERROR_TIMEOUT -> "连接失败或超时。请检查：云 Windows 是否开机、程序是否在运行、Tailscale 是否在线。"
                     else -> "加载失败：${error.description}"
                 })
