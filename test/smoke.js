@@ -2376,6 +2376,21 @@ async function main() {
     assert.ok(srv.includes('三项纪律') && srv.includes('黑板纪律'), '多步纪律与黑板纪律保留');
     assert.ok(srv.includes('slice(0, 1500)'), '黑板注记截断预算保留');
   });
+  await t('show 技能：48 小时临时静态发布内置技能（站点直发 + 文件下载页）', () => {
+    const skillMd = fs.readFileSync(path.join(ROOT, 'skills', 'show', 'SKILL.md'), 'utf8');
+    assert.ok(skillMd.startsWith('---') && skillMd.includes('name: show'), 'frontmatter name=show');
+    assert.ok(skillMd.includes('48 小时') && skillMd.includes('description:'), '描述含 48 小时语义');
+    assert.ok(skillMd.includes('下载网页') && skillMd.includes('模式 B'), '文件封装下载页模式存在');
+    assert.ok(skillMd.includes('模式 A'), '静态站点直发模式存在');
+    assert.ok(skillMd.includes('deploy.sh'), '引用部署脚本');
+    assert.ok(skillMd.includes('不要向用户索要 token'), '匿名上传语义（不索要凭据）');
+    assert.ok(skillMd.includes('.env') && skillMd.includes('敏感文件'), '发布前安全检查说明');
+    assert.ok(skillMd.includes('expiresAt'), '结果报告要求解析精确过期时间');
+    const sh = fs.readFileSync(path.join(ROOT, 'skills', 'show', 'deploy.sh'), 'utf8');
+    assert.ok(sh.includes('show.127.dev') && sh.includes('/upload'), '脚本上传端点正确');
+    assert.ok(sh.includes('.env') && sh.includes('secret') && sh.includes('exit 1'), '脚本内置敏感文件一票否决');
+    assert.ok(sh.includes('expiresAt'), '脚本输出过期时间');
+  });
   await t('P0-P3 前端静态防回归：交互元素接线', () => {
     const html = fs.readFileSync(path.join(ROOT, 'public', 'index.html'), 'utf8');
     // 撤回按钮已按用户反馈移除（接口保留）；断言防回归：前端不再出现撤回入口
