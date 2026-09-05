@@ -1,84 +1,136 @@
 package com.hwj.agent
 
+import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.ActivityNotFoundException
 import android.content.Intent
+import android.content.SharedPreferences
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Message
 import android.view.View
-import android.webkit.DownloadListener
+import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
+import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.widget.EditText
+import android.widget.ProgressBar
+import android.widget.TextView
+import android.widget.Toast
+import androidx.activity.OnBackPressedCallback
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import java.io.File
 
+/**
+ * 远程壳（2.0 架构）：本 APK 已移除内嵌 Node 运行时（旧方案归档于 android/legacy-node-src/）。
+ * 程序本体运行在用户的云 Windows 上，经 Tailscale 虚拟局域网访问。
+ * 本壳职责：管理服务地址（设置页 + 本机记忆）→ 全屏 WebView 承载交互 → 连接失败给出诊断指引。
+ */
 class MainActivity : AppCompatActivity() {
-    private lateinit var web: WebView
-    private lateinit var splash: View
-    private var filePathCallback: android.webkit.ValueCallback<Array<Uri>>? = null
 
-    companion object { private const val FILE_CHOOSER_REQUEST = 10001 }
+    private lateinit var prefs: SharedPreferences
+    private lateinit var web: WebView
+    private lateinit var progress: ProgressBar
+    private lateinit var setupView: View
+    private lateinit var urlInput: EditText
+    private lateinit var webContainer: View
+    private lateinit var errorView: View
+    private lateinit var errorText: TextView
+    private lateinit var fabMenu: TextView
+    private var serverUrl: String? = null
+    private var filePathCallback: ValueCallback<Array<Uri>>? = null
+
+    companion object {
+        private const val FILE_CHOOSER_REQUEST = 10001
+        private const val PREFS = "hwj_mobile"
+        private const val KEY_URL = "serverUrl"
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // 全局崩溃留痕：任何线程未捕获异常先写入 node-log.txt 再交给系统处理，
-        // 避免"无声闪崩"（用户可截图日志反馈，开发者可定位）
-        val upstream = Thread.getDefaultUncaughtExceptionHandler()
-        Thread.setDefaultUncaughtExceptionHandler { t, e ->
-            try {
-                NodeRuntime.log(this, "未捕获崩溃(${t.name}): ${e.stackTraceToString().take(3500)}")
-            } catch (_: Exception) { }
-            upstream?.uncaughtException(t, e)
-        }
         setContentView(R.layout.activity_main)
-        splash = findViewById(R.id.splash)
+        prefs = getSharedPreferences(PREFS, MODE_PRIVATE)
+
         web = findViewById(R.id.web)
+        progress = findViewById(R.id.progress)
+        setupView = findViewById(R.id.setupView)
+        urlInput = findViewById(R.id.urlInput)
+        webContainer = findViewById(R.id.webContainer)
+        errorView = findViewById(R.id.errorView)
+        errorText = findViewById(R.id.errorText)
+        fabMenu = findViewById(R.id.fabMenu)
+        findViewById<View>(R.id.connectBtn).setOnClickListener { onConnect() }
+        findViewById<View>(R.id.retryBtn).setOnClickListener { enterWeb(null) }
+        findViewById<View>(R.id.changeBtn).setOnClickListener { showSetup() }
+        fabMenu.setOnClickListener { showMenu() }
 
-        // 启动前台服务（内含 Node 运行时拉起与就绪探测）
-        NodeService.start(this)
+        setupWebView()
 
+        serverUrl = prefs.getString(KEY_URL, null)
+        savedInstanceState?.getString(KEY_URL)?.let { serverUrl = it }
+
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                if (webContainer.visibility == View.VISIBLE && web.canGoBack()) web.goBack() else finish()
+            }
+        })
+
+        if (serverUrl.isNullOrEmpty()) showSetup() else enterWeb(savedInstanceState)
+    }
+
+    @SuppressLint("SetJavaScriptEnabled")
+    private fun setupWebView() {
         web.settings.apply {
             javaScriptEnabled = true
             domStorageEnabled = true
             allowFileAccess = false
             allowContentAccess = false
+            useWideViewPort = true
+            loadWithOverviewMode = true
         }
-        // API 33+ 通知权限（前台服务通知可见性；拒绝不影响服务运行）
-        if (Build.VERSION.SDK_INT >= 33 &&
-            checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
-            requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 1)
-        }
+        web.setBackgroundColor(0xFF101418.toInt())
 
         web.webViewClient = object : WebViewClient() {
             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
                 val u = request.url
-                // 站内（127.0.0.1）放行，外链交给系统浏览器
-                return if (u.host == "127.0.0.1") false else {
-                    startActivity(Intent(Intent.ACTION_VIEW, u)); true
+                // 站内（服务器同主机）放行；其余站点与 scheme 交给系统浏览器
+                return if (u.host != null && u.host == serverHost()) false else {
+                    openExternal(u.toString()); true
                 }
             }
 
-            override fun onPageFinished(view: WebView?, url: String?) {
-                if (url != null && url.startsWith(NodeRuntime.BASE_URL)) splash.visibility = View.GONE
+            override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
+                if (!request.isForMainFrame) return
+                showError(when (error.errorCode) {
+                    ERROR_HOST_UNRESOLVED -> "服务地址无法解析。请确认地址填写正确，且手机 Tailscale 已连接。"
+                    ERROR_CONNECT, ERROR_TIMEOUT -> "连接失败或超时。请检查：云 Windows 是否开机、程序是否在运行、Tailscale 是否在线。"
+                    else -> "加载失败：${error.description}"
+                })
             }
         }
+
         web.webChromeClient = object : WebChromeClient() {
+            override fun onProgressChanged(view: WebView?, newProgress: Int) {
+                progress.progress = newProgress
+                progress.visibility = if (newProgress >= 100) View.GONE else View.VISIBLE
+            }
+
             // 文件上传：<input type=file> 必须经此回调拉起系统选择器，否则点击无反应
             override fun onShowFileChooser(
                 webView: WebView,
-                callback: android.webkit.ValueCallback<Array<Uri>>,
+                callback: ValueCallback<Array<Uri>>,
                 fileChooserParams: FileChooserParams
             ): Boolean {
                 filePathCallback?.onReceiveValue(null) // 上一次未完结的选择作废
                 filePathCallback = callback
-                val intent = fileChooserParams.createIntent().apply {
-                    addCategory(Intent.CATEGORY_OPENABLE)
-                }
                 return try {
-                    startActivityForResult(intent, FILE_CHOOSER_REQUEST)
+                    startActivityForResult(fileChooserParams.createIntent().apply {
+                        addCategory(Intent.CATEGORY_OPENABLE)
+                    }, FILE_CHOOSER_REQUEST)
                     true
                 } catch (e: ActivityNotFoundException) {
                     filePathCallback = null
@@ -86,39 +138,95 @@ class MainActivity : AppCompatActivity() {
                     false
                 }
             }
-        }
-        // 文件下载/导出：存入 App 私有 Downloads 后拉起系统分享
-        web.setDownloadListener(DownloadListener { url, _, _, mime, _ ->
-            Thread { shareDownloaded(url, mime) }.start()
-        })
 
-        // 就绪后加载页面（轮询回调主线程）；线程级兜底防中断异常闪崩
-        Thread {
-            try {
-                val deadline = System.currentTimeMillis() + 40_000
-                while (System.currentTimeMillis() < deadline && !NodeRuntime.ready) Thread.sleep(300)
-            } catch (_: InterruptedException) { /* 服务异常中断：按未就绪走失败页 */ }
-            runOnUiThread {
-                splash.visibility = View.GONE // 无论成败都撤掉启动页（否则失败信息被遮住）
-                if (NodeRuntime.ready) {
-                    web.loadUrl(NodeRuntime.BASE_URL)
-                } else {
-                    val diag = NodeRuntime.readLog(this)
-                        .replace("&", "&amp;").replace("<", "&lt;").replace("\n", "<br>")
-                    web.loadDataWithBaseURL(null,
-                        "<body style='background:#101418;color:#E8EDF2;font-family:sans-serif;padding:20px;line-height:1.7'>" +
-                        "<h3>服务启动失败</h3><p>Node 运行时未能就绪。可尝试完全退出 App 后重开；" +
-                        "仍失败请把下方诊断日志截图反馈。</p>" +
-                        "<pre style='background:#171C22;padding:14px;border-radius:8px;font-size:12px;white-space:pre-wrap;color:#AAB6C2'>$diag</pre>" +
-                        "</body>",
-                        "text/html", "utf-8", null)
+            // window.open（帮助页/发布页等新标签）WebView 无法承载，借探针取 URL 后转交外部浏览器
+            override fun onCreateWindow(view: WebView, isDialog: Boolean, isUserGesture: Boolean, resultMsg: Message): Boolean {
+                val probe = WebView(view.context)
+                probe.webViewClient = object : WebViewClient() {
+                    override fun shouldOverrideUrlLoading(v: WebView, request: WebResourceRequest): Boolean {
+                        openExternal(request.url.toString()); return true
+                    }
                 }
+                (resultMsg.obj as WebView.WebViewTransport).setWebView(probe)
+                resultMsg.sendToTarget()
+                return true
             }
-        }.start()
+        }
+
+        // 网页触发的下载（如交付文件导出）：落地 App 私有目录后经 FileProvider 拉起系统分享
+        web.setDownloadListener { url, _, _, mime, _ -> Thread { shareDownloaded(url, mime) }.start() }
     }
 
-    /** WebView 下载（交付文件导出）：拉取后经 FileProvider 分享 */
+    private fun enterWeb(saved: Bundle?) {
+        setupView.visibility = View.GONE
+        errorView.visibility = View.GONE
+        webContainer.visibility = View.VISIBLE
+        fabMenu.visibility = View.VISIBLE
+        val url = serverUrl ?: return showSetup()
+        // 进程重建优先恢复 WebView 历史栈，避免整页重载
+        val restored = saved != null && web.restoreState(saved) != null
+        if (!restored) web.loadUrl(url)
+    }
+
+    private fun showSetup() {
+        webContainer.visibility = View.GONE
+        errorView.visibility = View.GONE
+        fabMenu.visibility = View.GONE
+        setupView.visibility = View.VISIBLE
+        urlInput.setText(serverUrl ?: "")
+    }
+
+    private fun showError(reason: String) {
+        progress.visibility = View.GONE
+        webContainer.visibility = View.GONE
+        fabMenu.visibility = View.GONE
+        errorView.visibility = View.VISIBLE
+        errorText.text = reason
+    }
+
+    private fun showMenu() {
+        AlertDialog.Builder(this)
+            .setItems(arrayOf("更改服务器地址", "刷新页面")) { _, which ->
+                when (which) { 0 -> showSetup(); 1 -> web.reload() }
+            }
+            .show()
+    }
+
+    private fun onConnect() {
+        val normalized = normalizeUrl(urlInput.text.toString())
+        if (normalized == null) {
+            Toast.makeText(this, "请填写完整地址，例如 http://100.x.y.z:3788", Toast.LENGTH_LONG).show()
+            return
+        }
+        serverUrl = normalized
+        prefs.edit().putString(KEY_URL, normalized).apply()
+        enterWeb(null)
+    }
+
+    /** 补 scheme、去尾斜杠；解析不出主机判为非法 */
+    private fun normalizeUrl(raw: String): String? {
+        var s = raw.trim().trimEnd('/')
+        if (s.isEmpty()) return null
+        if (!s.contains("://")) s = "http://$s"
+        val u = Uri.parse(s)
+        return if (u.host.isNullOrEmpty()) null else s
+    }
+
+    private fun serverHost(): String? = serverUrl?.let { Uri.parse(it).host }
+
+    private fun openExternal(url: String) {
+        try {
+            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+        } catch (_: Exception) {
+            Toast.makeText(this, "无法打开链接", Toast.LENGTH_SHORT).show()
+        }
+    }
+
     private fun shareDownloaded(url: String, mime: String) {
+        if (!url.startsWith("http")) {
+            runOnUiThread { Toast.makeText(this, "该类型文件暂不支持壳内下载", Toast.LENGTH_LONG).show() }
+            return
+        }
         try {
             val name = url.substringAfterLast('/').substringBefore('?').ifEmpty { "export.txt" }
             val conn = java.net.URL(url).openConnection() as java.net.HttpURLConnection
@@ -136,7 +244,7 @@ class MainActivity : AppCompatActivity() {
             startActivity(Intent.createChooser(i, "分享 $name"))
         } catch (e: Exception) {
             runOnUiThread {
-                android.widget.Toast.makeText(this, "导出失败：${e.message}", android.widget.Toast.LENGTH_LONG).show()
+                Toast.makeText(this, "导出失败：${e.message}", Toast.LENGTH_LONG).show()
             }
         }
     }
@@ -145,20 +253,15 @@ class MainActivity : AppCompatActivity() {
         if (requestCode == FILE_CHOOSER_REQUEST) {
             val cb = filePathCallback ?: return
             filePathCallback = null
-            cb.onReceiveValue(
-                WebChromeClient.FileChooserParams.parseResult(resultCode, data)
-            )
+            cb.onReceiveValue(WebChromeClient.FileChooserParams.parseResult(resultCode, data))
             return
         }
         super.onActivityResult(requestCode, resultCode, data)
     }
 
-    override fun onBackPressed() {
-        if (web.canGoBack()) web.goBack() else super.onBackPressed()
-    }
-
-    override fun onDestroy() {
-        // Node 由前台服务持有，Activity 销毁不退出运行时
-        super.onDestroy()
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putString(KEY_URL, serverUrl)
+        if (webContainer.visibility == View.VISIBLE) web.saveState(outState)
     }
 }

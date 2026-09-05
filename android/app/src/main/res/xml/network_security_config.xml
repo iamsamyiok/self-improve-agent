@@ -1,8 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
-    <!-- 仅放行本地环回明文 HTTP（WebView 访问内嵌 Node 服务）；外部流量仍要求 HTTPS -->
-    <domain-config cleartextTrafficPermitted="true">
-        <domain includeSubdomains="false">127.0.0.1</domain>
-        <domain includeSubdomains="false">localhost</domain>
-    </domain-config>
+    <!-- 放行全局明文 HTTP：服务地址是 Tailscale 虚拟局域网 IP（100.x.x.x），
+         流量实际在 WireGuard 隧道内端到端加密，明文仅存在于本机回环段 -->
+    <base-config cleartextTrafficPermitted="true" />
 </network-security-config>

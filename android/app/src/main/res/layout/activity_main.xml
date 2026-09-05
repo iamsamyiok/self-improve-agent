@@ -3,33 +3,137 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 
-    <WebView
-        android:id="@+id/web"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent" />
-
+    <!-- 状态一：设置页（首次启动或主动更改地址时可见） -->
     <LinearLayout
-        android:id="@+id/splash"
+        android:id="@+id/setupView"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:orientation="vertical"
         android:gravity="center"
+        android:padding="28dp"
         android:background="#101418">
 
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="hwj-agent"
+            android:text="HWJ Agent"
             android:textColor="#E8EDF2"
-            android:textSize="28sp"
+            android:textSize="30sp"
             android:textStyle="bold" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:text="填写云 Windows 上程序的服务地址，推荐使用 Tailscale 地址："
+            android:textColor="#7A8694"
+            android:textSize="14sp" />
+
+        <EditText
+            android:id="@+id/urlInput"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:hint="http://100.x.y.z:3788"
+            android:inputType="textUri"
+            android:maxLines="1"
+            android:textColor="#E8EDF2"
+            android:textColorHint="#4A5560"
+            android:imeOptions="actionDone" />
+
+        <Button
+            android:id="@+id/connectBtn"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:text="保存并连接" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="地址仅保存在本机。使用前提：手机已安装 Tailscale 并登录，与云 Windows 处于同一网络。"
+            android:textColor="#5A6472"
+            android:textSize="12sp" />
+    </LinearLayout>
+
+    <!-- 状态二：网页容器 -->
+    <LinearLayout
+        android:id="@+id/webContainer"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:visibility="gone">
+
+        <ProgressBar
+            android:id="@+id/progress"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="match_parent"
+            android:layout_height="3dp"
+            android:max="100"
+            android:visibility="gone" />
+
+        <WebView
+            android:id="@+id/web"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
+    </LinearLayout>
+
+    <!-- 状态三：连接失败指引页 -->
+    <LinearLayout
+        android:id="@+id/errorView"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:padding="28dp"
+        android:background="#101418"
+        android:visibility="gone">
 
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:text="正在启动 Node 运行时…"
-            android:textColor="#7A8694"
+            android:text="无法连接服务器"
+            android:textColor="#E8EDF2"
+            android:textSize="20sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/errorText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:lineSpacingExtra="4dp"
+            android:textColor="#AAB6C2"
             android:textSize="14sp" />
+
+        <Button
+            android:id="@+id/retryBtn"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:text="重试" />
+
+        <Button
+            android:id="@+id/changeBtn"
+            style="@style/Widget.AppCompat.Button.Borderless"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="更改地址"
+            android:textColor="#7A8694" />
     </LinearLayout>
+
+    <!-- 悬浮菜单入口：网页状态下随时可改地址 / 刷新 -->
+    <TextView
+        android:id="@+id/fabMenu"
+        android:layout_width="44dp"
+        android:layout_height="44dp"
+        android:layout_gravity="bottom|end"
+        android:layout_margin="20dp"
+        android:background="@drawable/bg_fab"
+        android:gravity="center"
+        android:text="⋯"
+        android:textColor="#AAB6C2"
+        android:textSize="20sp"
+        android:visibility="gone" />
 </FrameLayout>

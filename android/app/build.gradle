@@ -3,6 +3,13 @@ plugins {
     id 'org.jetbrains.kotlin.android'
 }
 
+// 正式签名经 GitHub Actions Secrets 注入（固定 keystore 才能覆盖安装升级）；
+// Secrets 缺失时回退 debug 临时签名——可安装可使用，换正式签名后需卸载重装一次
+def ksFile = project.findProperty('MOBILE_STORE_FILE')
+def ksPass = project.findProperty('MOBILE_STORE_PASSWORD')
+def ksAlias = project.findProperty('MOBILE_KEY_ALIAS')
+def ksKeyPass = project.findProperty('MOBILE_KEY_PASSWORD')
+
 android {
     namespace = "com.hwj.agent"
     compileSdk = 34
@@ -11,17 +18,18 @@ android {
         applicationId = "com.hwj.agent"
         minSdk = 24
         targetSdk = 34
-        versionCode = 15
-        versionName = "1.5.0"
-        ndk {
-            // 只带 arm64（真机主流）+ x86_64（模拟器调试），控制 APK 体积
-            abiFilters += ['arm64-v8a', 'x86_64']
-        }
-        externalNativeBuild {
-            cmake {
-                // libnode.so NEEDED libc++_shared.so——shared STL 才会把该库打进 APK
-                // （缺它 System.load 直接 dlopen failed，Node 永远起不来）
-                arguments "-DANDROID_STL=c++_shared"
+        versionCode = 16
+        // 2.0.0：架构换代——移除内嵌 Node 运行时（legacy-node-src/ 归档），转为云 Windows + Tailscale 远程壳
+        versionName = "2.0.0"
+    }
+
+    signingConfigs {
+        release {
+            if (ksFile) {
+                storeFile file(ksFile)
+                storePassword ksPass
+                keyAlias ksAlias
+                keyPassword ksKeyPass
             }
         }
     }
@@ -30,13 +38,7 @@ android {
         release {
             minifyEnabled = false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-        }
-    }
-
-    externalNativeBuild {
-        cmake {
-            path = file('src/main/cpp/CMakeLists.txt')
-            version = '3.22.1'
+            signingConfig ksFile ? signingConfigs.release : signingConfigs.debug
         }
     }
 
@@ -45,15 +47,6 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
     kotlinOptions { jvmTarget = '17' }
-
-    // libnode.so 走 assets 运行期释放方案（规避 Android 15+ 16KB 页对齐阻断）；
-    // 排除 CMake 链接输入被 AGP 自动收进 lib/ 的重复副本
-    packaging {
-        jniLibs {
-            useLegacyPackaging = true
-            excludes += ['**/libnode.so']
-        }
-    }
 }
 
 dependencies {
