@@ -131,7 +131,7 @@ module.exports = {
         // Android：命令缺失时附上能力提示让模型自纠（换行拼接，可被插件清洗逻辑保留）
         const hint = MOBILE ? mobileHint(combined) : '';
         const withHint = (s) => hint ? `${s}\n[Android 环境提示] ${hint}` : s;
-        if (err && err.killed) resolve(withHint(`命令超时被终止（${timeout/1000} 秒）。部分输出：\n${tail}`));
+        if (err && err.killed) resolve(withHint(`命令超时被终止（${timeout/1000} 秒）。命令未执行完成，产物可能不完整，继续后续步骤前必须先确认/重跑。如需更长时间，在参数中传更大的 timeout（毫秒，如下载大文件用 300000）重跑本命令。部分输出：\n${tail}`));
         else if (err && err.code === 127) resolve(withHint(`命令未找到（127）。输出：\n${tail || '（无输出）'}`));
         else if (err) resolve(withHint(`命令退出码 ${err.code == null ? '?' : err.code}。输出：\n${tail || '（无输出）'}`));
         // 重定向无输出命令：返回确认提示
