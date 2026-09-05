@@ -1666,7 +1666,7 @@ const server = http.createServer(async (req, res) => {
         let host = '';
         try { host = cfgSnap.inner.base_url ? new URL(cfgSnap.inner.base_url).host : ''; } catch { host = ''; }
         const pluginRows = plugins.listPlugins().map(x => ({ name: x.name, desc: x.desc || '', essential: !!x.essential, status: x.status || 'loaded', source: x.source || '' }));
-        const skills = (() => { try { return require('./plugins/skill').listAll({ cwd: WS_DIR }); } catch { return []; } })();
+        const skills = (() => { try { return require('./plugins/skill').listAll({ cwd: wsDir }); } catch { return []; } })();
         const toolCalls = innerMessages.filter(m => m.role === 'tool').length;
         let estTokens = 0;
         try { estTokens = require('./lib/inner').estimateMessagesTokens(innerMessages); } catch { /* 估算失败按 0 */ }
