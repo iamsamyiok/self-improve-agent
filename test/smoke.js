@@ -2403,6 +2403,58 @@ async function main() {
     assert.ok(sh.includes('.env') && sh.includes('secret') && sh.includes('exit 1'), '脚本内置敏感文件一票否决');
     assert.ok(sh.includes('expiresAt'), '脚本输出过期时间');
   });
+  await t('发布预检硬约束：体积/文件数超限拒绝发布，预检通过才放行（show + pinme）', () => {
+    const os = require('os');
+    const { execFileSync } = require('child_process');
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'pubcheck-'));
+    const site = path.join(tmp, 'site');
+    fs.mkdirSync(site);
+    fs.writeFileSync(path.join(site, 'index.html'), '<html></html>');
+    // 不可压缩随机字节：gzip 后仍超小限额，确保触发体积拒绝路径
+    fs.writeFileSync(path.join(site, 'big.bin'), require('crypto').randomBytes(5000));
+    const run = (script, args, env) => {
+      try {
+        return { status: 0, out: execFileSync('bash', [script, ...args], { env: { ...process.env, ...env }, encoding: 'utf8' }) };
+      } catch (e) {
+        return { status: e.status, out: (e.stdout || '') + (e.stderr || '') };
+      }
+    };
+    // show：体积超限（打包后实测）→ 中止且明确不上传
+    let r = run(path.join(ROOT, 'skills', 'show', 'deploy.sh'), [site, 't'], { SHOW_MAX_BYTES: '1000', SHOW_API_URL: 'http://127.0.0.1:1' });
+    assert.ok(r.status !== 0 && r.out.includes('超过体积上限') && r.out.includes('不执行上传'), 'show 体积超限拒绝发布');
+    // show：文件数超限（打包前拦截）
+    r = run(path.join(ROOT, 'skills', 'show', 'deploy.sh'), [site, 't'], { SHOW_MAX_FILES: '1', SHOW_API_URL: 'http://127.0.0.1:1' });
+    assert.ok(r.status !== 0 && r.out.includes('超过上限') && r.out.includes('已中止发布'), 'show 文件数超限拒绝发布');
+    // show：预检通过（正常限额）→ 走到上传步骤（端点不可达仅上传失败，预检文案已输出）
+    r = run(path.join(ROOT, 'skills', 'show', 'deploy.sh'), [site, 't'], { SHOW_API_URL: 'http://127.0.0.1:1' });
+    assert.ok(r.out.includes('预检通过'), 'show 正常目录预检通过并进入上传');
+    // pinme：单文件超限
+    r = run(path.join(ROOT, 'skills', 'pinme', 'deploy.sh'), [site], { PINME_MAX_FILE_BYTES: '100' });
+    assert.ok(r.status !== 0 && r.out.includes('超过单文件上限') && r.out.includes('已中止发布'), 'pinme 单文件超限拒绝发布');
+    // pinme：总体积超限
+    r = run(path.join(ROOT, 'skills', 'pinme', 'deploy.sh'), [site], { PINME_MAX_TOTAL_BYTES: '1000' });
+    assert.ok(r.status !== 0 && r.out.includes('超过上限') && r.out.includes('已中止发布'), 'pinme 总体积超限拒绝发布');
+    // pinme：敏感文件一票否决
+    const bad = path.join(tmp, 'bad');
+    fs.mkdirSync(bad);
+    fs.writeFileSync(path.join(bad, 'index.html'), '<html></html>');
+    fs.writeFileSync(path.join(bad, '.env'), 'KEY=x');
+    r = run(path.join(ROOT, 'skills', 'pinme', 'deploy.sh'), [bad]);
+    assert.ok(r.status !== 0 && r.out.includes('疑似敏感文件'), 'pinme 敏感文件拒绝发布');
+    // pinme：预检通过 + fake pinme 验证全流程（不触真实网络）
+    const fakebin = path.join(tmp, 'fakebin');
+    fs.mkdirSync(fakebin);
+    fs.writeFileSync(path.join(fakebin, 'pinme'), '#!/usr/bin/env node\nconsole.log("URL https://fake.pinme.dev");\n');
+    fs.chmodSync(path.join(fakebin, 'pinme'), 0o755);
+    const fakeEnv = { PATH: fakebin + path.delimiter + process.env.PATH };
+    r = run(path.join(ROOT, 'skills', 'pinme', 'deploy.sh'), [site], fakeEnv);
+    assert.ok(r.status === 0 && r.out.includes('预检通过') && r.out.includes('fake.pinme.dev'), 'pinme 预检通过后正常调用上传');
+    // pinme SKILL.md 与脚本限额一致性：500MB 实测值入文档
+    const pinmeMd = fs.readFileSync(path.join(ROOT, 'skills', 'pinme', 'SKILL.md'), 'utf8');
+    assert.ok(pinmeMd.includes('500 MB') && pinmeMd.includes('FILE_SIZE_LIMIT'), 'SKILL.md 记录实测限额依据');
+    const psh = fs.readFileSync(path.join(ROOT, 'skills', 'pinme', 'deploy.sh'), 'utf8');
+    assert.ok(psh.includes('500 * 1024 * 1024'), '脚本默认限额与平台一致');
+  });
   await t('快照技能显示：来源列与描述清洗（防 DOCTYPE 垃圾描述）', () => {
     const html = fs.readFileSync(path.join(ROOT, 'public', 'index.html'), 'utf8');
     const srv = fs.readFileSync(path.join(ROOT, 'server.js'), 'utf8');
